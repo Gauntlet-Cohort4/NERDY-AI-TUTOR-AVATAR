@@ -5,12 +5,17 @@ This module starts the LiveKit AgentServer and wires together:
 - Simli AvatarSession for video rendering
 - MetricsCollector for latency tracking
 - SubjectRouterAgent as the initial agent
+- Lightweight HTTP health check server on port 8080
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 import structlog
 
@@ -18,6 +23,41 @@ from src.config import AppConfig
 from src.logging_setup import setup_logging
 
 logger = structlog.get_logger(__name__)
+
+# ── Health check HTTP server ────────────────────────────────────────────────
+
+HEALTH_PORT = 8080
+
+
+class _HealthHandler(BaseHTTPRequestHandler):
+    """Minimal HTTP handler that responds to GET /health."""
+
+    def do_GET(self) -> None:
+        if self.path == "/health":
+            body = json.dumps(health_check()).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, format, *args) -> None:
+        """Suppress default access logs — structlog handles our logging."""
+        pass
+
+
+def _start_health_server() -> None:
+    """Start the health check HTTP server in a daemon thread."""
+    server = HTTPServer(("0.0.0.0", HEALTH_PORT), _HealthHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    logger.info("health_server_started", port=HEALTH_PORT)
+
+
+# ── Agent session config ────────────────────────────────────────────────────
 
 
 @dataclass(frozen=True)
@@ -67,19 +107,21 @@ def health_check() -> dict:
     }
 
 
+# ── LiveKit entrypoint ──────────────────────────────────────────────────────
+
+
 async def entrypoint(ctx) -> None:
     """LiveKit AgentServer entrypoint — called for each new room connection.
 
     Wires STT → LLM → TTS pipeline with Simli avatar and metrics collection.
     """
     from livekit.agents import AgentSession
-    from livekit.plugins import deepgram, groq, cartesia, simli, silero
+    from livekit.plugins import deepgram, groq, cartesia, silero
 
     from src.agents.router import SubjectRouterAgent
     from src.avatar.renderer import SimliAvatarAdapter
     from src.metrics import MetricsCollector
 
-    setup_logging()
     config = AppConfig.from_env()
     session_id = ctx.room.name if hasattr(ctx, "room") else "unknown"
 
@@ -137,6 +179,7 @@ if __name__ == "__main__":
     from livekit.agents import WorkerOptions, cli
 
     setup_logging()
+    _start_health_server()
     logger.info("agent_server_starting")
 
     cli.run_app(

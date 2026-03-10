@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { AccessToken } from "livekit-server-sdk";
 
 const VALID_SUBJECTS = new Set(["biology", "math", "physics"]);
 
@@ -13,20 +14,43 @@ export async function GET(request: Request) {
     );
   }
 
-  const token = process.env.LIVEKIT_TOKEN ?? "";
-  const url = process.env.NEXT_PUBLIC_LIVEKIT_URL ?? "";
+  const apiKey = process.env.LIVEKIT_API_KEY ?? "";
+  const apiSecret = process.env.LIVEKIT_API_SECRET ?? "";
+  const livekitUrl = process.env.LIVEKIT_URL ?? "";
 
-  // Health check: warn but still return so the UI can surface the misconfiguration.
-  const healthy = Boolean(token && url);
+  if (!apiKey || !apiSecret || !livekitUrl) {
+    return NextResponse.json(
+      {
+        error: "Server misconfigured",
+        warning: "LIVEKIT_API_KEY, LIVEKIT_API_SECRET, or LIVEKIT_URL is not set",
+        healthy: false,
+      },
+      { status: 503 }
+    );
+  }
 
-  return NextResponse.json(
-    {
-      token,
-      url,
-      subject,
-      healthy,
-      ...(healthy ? {} : { warning: "LIVEKIT_TOKEN or NEXT_PUBLIC_LIVEKIT_URL is not configured" }),
-    },
-    { status: 200 }
-  );
+  const roomName = `tutor-${subject}-${Date.now()}`;
+  const participantIdentity = `student-${Date.now()}`;
+
+  const token = new AccessToken(apiKey, apiSecret, {
+    identity: participantIdentity,
+    name: "Student",
+  });
+  token.addGrant({
+    room: roomName,
+    roomJoin: true,
+    canPublish: true,
+    canSubscribe: true,
+  });
+
+  const jwt = await token.toJwt();
+
+  return NextResponse.json({
+    token: jwt,
+    url: livekitUrl,
+    subject,
+    room: roomName,
+    identity: participantIdentity,
+    healthy: true,
+  });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
 import { createLogger } from "@/lib/logger";
@@ -25,7 +25,7 @@ interface TokenState {
   url: string;
 }
 
-export default function SessionPage() {
+function SessionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -84,7 +84,6 @@ export default function SessionPage() {
   }, [router, subject]);
 
   const handleStartSession = useCallback(() => {
-    // Re-fetch token if needed (e.g., after an error)
     if (!tokenState && !isLoadingToken) {
       setIsLoadingToken(true);
       setTokenError(null);
@@ -136,18 +135,13 @@ export default function SessionPage() {
       video={false}
       onDisconnected={handleEndSession}
     >
-      {/* Renders remote audio tracks automatically */}
       <RoomAudioRenderer />
-
-      {/* Tracks LiveKit connection state and metrics from data channel */}
       <SessionInner
         subject={subject}
         onConnectionStateChange={handleConnectionStateChange}
         onMetricsUpdate={handleMetricsUpdate}
       />
-
       <main className="flex min-h-screen flex-col bg-gray-950 text-white">
-        {/* Header */}
         <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
           <div>
             <h1 className="text-xl font-bold capitalize">{subject} Tutor</h1>
@@ -155,16 +149,12 @@ export default function SessionPage() {
           </div>
           <ConnectionStatus state={connectionState} />
         </header>
-
-        {/* Avatar area */}
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="relative w-full max-w-3xl">
             <AvatarDisplay />
             <LatencyOverlay metrics={latestMetrics} />
           </div>
         </div>
-
-        {/* Controls footer */}
         <footer className="flex items-center justify-center px-6 py-5 border-t border-gray-800">
           <SessionControls
             isConnected={isConnected}
@@ -174,5 +164,20 @@ export default function SessionPage() {
         </footer>
       </main>
     </LiveKitRoom>
+  );
+}
+
+export default function SessionPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-950">
+          <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-400 text-sm">Loading session…</p>
+        </main>
+      }
+    >
+      <SessionContent />
+    </Suspense>
   );
 }

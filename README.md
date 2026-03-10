@@ -10,16 +10,16 @@ All five implementation phases are complete. The system is fully wired end-to-en
 Student Mic → WebRTC/LiveKit → Deepgram STT → Groq LLM → Cartesia TTS → Simli Avatar → WebRTC → Student Screen
 ```
 
-All pipeline stages stream concurrently — tokens stream into TTS which streams audio into the avatar renderer. Target end-to-end latency: <500ms (first avatar frame), <1s max acceptable.
+All pipeline stages stream concurrently — tokens stream into TTS which streams audio into the avatar renderer.
 
-| Pipeline Stage | Target | Max Acceptable |
+| Pipeline Stage | Expected | Actual |
 |---|---|---|
-| Speech-to-text (Deepgram Nova-3) | <150ms | <300ms |
-| LLM time-to-first-token (Groq) | <200ms | <400ms |
-| TTS first audio byte (Cartesia) | <150ms | <300ms |
-| Avatar rendering (Simli Trinity) | <100ms | <200ms |
-| Network + overhead (WebRTC) | <50ms | <100ms |
-| **Total end-to-end** | **<500ms** | **<1000ms** |
+| Speech-to-text (Deepgram Nova-3) | ~150ms | Waiting for data |
+| LLM time-to-first-token (Groq) | ~200ms | Waiting for data |
+| TTS first audio byte (Cartesia) | ~150ms | Waiting for data |
+| Avatar rendering (Simli Trinity) | ~100ms | Waiting for data |
+| Network + overhead (WebRTC) | ~50ms | Waiting for data |
+| **Total end-to-end** | **~500ms** | **Waiting for data** |
 
 ## Prerequisites
 

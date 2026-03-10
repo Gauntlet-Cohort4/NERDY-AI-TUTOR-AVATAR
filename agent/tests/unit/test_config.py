@@ -44,10 +44,7 @@ class TestConfigFailsFast:
 
 
 class TestConfigDefaults:
-    def test_config_defaults_applied(self, mock_env_vars, monkeypatch):
-        # Clear optional vars that might leak from .env
-        for key in ["DEEPGRAM_MODEL", "GROQ_MODEL", "CARTESIA_MODEL", "CARTESIA_VOICE_ID", "LOG_LEVEL", "SIMLI_FACE_ID"]:
-            monkeypatch.delenv(key, raising=False)
+    def test_config_defaults_applied(self, mock_env_vars):
         config = AppConfig.from_env()
         assert config.deepgram_model == "nova-3"
         assert config.groq_model == "llama-3.3-70b-versatile"

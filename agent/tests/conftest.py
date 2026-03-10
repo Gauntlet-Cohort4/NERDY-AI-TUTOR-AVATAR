@@ -8,8 +8,9 @@ import pytest
 
 @pytest.fixture
 def mock_env_vars(monkeypatch):
-    """Set all required environment variables to dummy values."""
+    """Set all environment variables to controlled values (required + optional defaults)."""
     env_vars = {
+        # Required
         "LIVEKIT_URL": "wss://test.livekit.cloud",
         "LIVEKIT_API_KEY": "test_livekit_key",
         "LIVEKIT_API_SECRET": "test_livekit_secret",
@@ -17,6 +18,13 @@ def mock_env_vars(monkeypatch):
         "GROQ_API_KEY": "test_groq_key",
         "CARTESIA_API_KEY": "test_cartesia_key",
         "SIMLI_API_KEY": "test_simli_key",
+        # Optional — set to their expected defaults so .env never leaks
+        "DEEPGRAM_MODEL": "nova-3",
+        "GROQ_MODEL": "llama-3.3-70b-versatile",
+        "CARTESIA_MODEL": "sonic-3",
+        "CARTESIA_VOICE_ID": "f786b574-daa5-4673-aa0c-cbe3e8534c02",
+        "SIMLI_FACE_ID": "",
+        "LOG_LEVEL": "INFO",
     }
     for key, value in env_vars.items():
         monkeypatch.setenv(key, value)

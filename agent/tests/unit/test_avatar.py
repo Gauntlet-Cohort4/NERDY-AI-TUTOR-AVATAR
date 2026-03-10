@@ -40,12 +40,12 @@ class TestSimliAvatarAdapter:
         assert isinstance(adapter, AvatarRenderer)
 
     @pytest.mark.asyncio
-    async def test_simli_adapter_start_not_implemented(self):
+    async def test_simli_adapter_start_graceful_without_plugin(self):
+        """start() should not raise even if simli plugin is unavailable."""
         adapter = SimliAvatarAdapter(api_key="test", face_id="test-face")
         mock_session = AsyncMock()
         mock_room = AsyncMock()
-        with pytest.raises(NotImplementedError):
-            await adapter.start(mock_session, mock_room)
+        await adapter.start(mock_session, mock_room)  # Should not raise
 
     @pytest.mark.asyncio
     async def test_simli_adapter_close_succeeds(self):

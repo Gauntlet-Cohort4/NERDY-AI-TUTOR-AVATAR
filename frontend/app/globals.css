@@ -1,3 +1,16 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer components {
+  /* Avatar container — ensures the 16:9 aspect ratio is maintained on all
+     viewport sizes and that the overlay children stack correctly. */
+  .avatar-container {
+    @apply relative w-full overflow-hidden rounded-xl bg-gray-900 shadow-2xl;
+    aspect-ratio: 16 / 9;
+  }
+
+  .avatar-video {
+    @apply absolute inset-0 w-full h-full object-cover;
+  }
+}

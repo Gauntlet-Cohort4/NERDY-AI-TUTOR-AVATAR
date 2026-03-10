@@ -1,6 +1,9 @@
 # ECC (Everything Claude Code) project-specific files
 .claude/
 
+# Tech spec (local reference only)
+Nerdy_AI_Tutor_Tech_Spec*
+
 # Dependencies
 node_modules/
 .pnp

@@ -35,7 +35,7 @@ export default function SessionInner({
   }, [lkConnectionState, onConnectionStateChange, subject]);
 
   // Subscribe to the agent's data channel for metrics messages.
-  useDataChannel(undefined, (message) => {
+  useDataChannel("metrics", (message) => {
     const metrics = parseMetricsMessage(message.payload);
     if (metrics !== null) {
       logger.debug("metrics_received", { turn: metrics.turn });

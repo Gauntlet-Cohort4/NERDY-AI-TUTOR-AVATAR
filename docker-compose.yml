@@ -1,20 +1,59 @@
 version: "3.8"
 
+networks:
+  tutor-net:
+    driver: bridge
+
 services:
   agent:
     build:
       context: ./agent
       dockerfile: Dockerfile
     env_file: .env
+    ports:
+      - "8080:8080"
     restart: unless-stopped
+    networks:
+      - tutor-net
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request, sys; req = urllib.request.urlopen('http://localhost:8080/health', timeout=4); sys.exit(0 if req.status == 200 else 1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    volumes:
+      # Mount source for hot-reload in development
+      - ./agent/src:/app/src:ro
+      - ./agent/main.py:/app/main.py:ro
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    env_file: .env
     ports:
       - "3000:3000"
-    env_file: .env
-    depends_on:
-      - agent
     restart: unless-stopped
+    networks:
+      - tutor-net
+    depends_on:
+      agent:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const http = require('http'); const req = http.get('http://localhost:3000/api/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)); req.on('error', () => process.exit(1));",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3

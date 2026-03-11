@@ -5,9 +5,22 @@ Usage:
     session.on("metrics_collected", mc.on_metrics)
     # After session ends:
     summary = mc.session_summary()
+
+In livekit-agents 1.4.x, ``metrics_collected`` fires a ``MetricsCollectedEvent``
+whose ``.metrics`` attribute is a *union* type — one of ``STTMetrics``,
+``LLMMetrics``, ``TTSMetrics``, ``VADMetrics``, ``EOUMetrics``, or
+``RealtimeModelMetrics``.  Each event delivers a single metric type, so we
+accumulate individual stage timings and assemble ``TurnMetrics`` on demand.
 """
 
+from __future__ import annotations
+
 import structlog
+from livekit.agents.metrics import (
+    LLMMetrics,
+    STTMetrics,
+    TTSMetrics,
+)
 
 from src.types import TurnMetrics
 
@@ -15,38 +28,84 @@ logger = structlog.get_logger(__name__)
 
 
 class MetricsCollector:
-    """Collects per-turn and per-session latency metrics from AgentSession events."""
+    """Collects per-turn and per-session latency metrics from AgentSession events.
+
+    Each ``metrics_collected`` event delivers a single metric type.  We store
+    the latest value for each stage and periodically assemble ``TurnMetrics``
+    snapshots when a TTS metric arrives (chosen because TTS is the last stage
+    in the STT -> LLM -> TTS pipeline).
+    """
 
     def __init__(self, session_id: str):
         self.session_id = session_id
         self.turn_metrics: list[TurnMetrics] = []
         self._current_turn = 0
 
-    def on_metrics(self, metrics_event) -> None:
-        """Handle metrics events emitted by AgentSession.
+        # Accumulate latest values per stage (in seconds)
+        self._latest_stt_duration: float = 0.0
+        self._latest_llm_ttft: float = 0.0
+        self._latest_tts_ttfb: float = 0.0
 
-        Extracts per-stage timings and stores as TurnMetrics.
-        Converts seconds to milliseconds.
+    def on_metrics(self, event) -> None:
+        """Handle ``MetricsCollectedEvent`` emitted by ``AgentSession``.
+
+        ``event.metrics`` is one of ``STTMetrics | LLMMetrics | TTSMetrics |
+        VADMetrics | EOUMetrics | RealtimeModelMetrics``.  We extract the
+        relevant timing from each and record a full ``TurnMetrics`` when the
+        TTS metric arrives (last stage in the pipeline).
         """
-        self._current_turn += 1
-        turn = TurnMetrics(
-            turn_number=self._current_turn,
-            stt_ms=getattr(metrics_event, "stt_duration", 0.0) * 1000,
-            llm_ttft_ms=getattr(metrics_event, "llm_ttft", 0.0) * 1000,
-            tts_ttfb_ms=getattr(metrics_event, "tts_ttfb", 0.0) * 1000,
-            total_e2e_ms=getattr(metrics_event, "e2e_duration", 0.0) * 1000,
-        )
-        self.turn_metrics.append(turn)
+        metrics = event.metrics
 
-        logger.info(
-            "turn_metrics",
-            session_id=self.session_id,
-            turn=turn.turn_number,
-            stt_ms=turn.stt_ms,
-            llm_ttft_ms=turn.llm_ttft_ms,
-            tts_ttfb_ms=turn.tts_ttfb_ms,
-            total_ms=turn.total_e2e_ms,
-        )
+        if isinstance(metrics, STTMetrics):
+            self._latest_stt_duration = metrics.duration
+            logger.debug(
+                "stt_metrics",
+                session_id=self.session_id,
+                duration_s=metrics.duration,
+            )
+        elif isinstance(metrics, LLMMetrics):
+            self._latest_llm_ttft = metrics.ttft
+            logger.debug(
+                "llm_metrics",
+                session_id=self.session_id,
+                ttft_s=metrics.ttft,
+                duration_s=metrics.duration,
+            )
+        elif isinstance(metrics, TTSMetrics):
+            self._latest_tts_ttfb = metrics.ttfb
+
+            # TTS is the last pipeline stage — assemble a full turn snapshot
+            self._current_turn += 1
+            turn = TurnMetrics(
+                turn_number=self._current_turn,
+                stt_ms=self._latest_stt_duration * 1000,
+                llm_ttft_ms=self._latest_llm_ttft * 1000,
+                tts_ttfb_ms=self._latest_tts_ttfb * 1000,
+                total_e2e_ms=(
+                    self._latest_stt_duration
+                    + self._latest_llm_ttft
+                    + self._latest_tts_ttfb
+                ) * 1000,
+            )
+            self.turn_metrics.append(turn)
+
+            logger.info(
+                "turn_metrics",
+                session_id=self.session_id,
+                turn=turn.turn_number,
+                stt_ms=turn.stt_ms,
+                llm_ttft_ms=turn.llm_ttft_ms,
+                tts_ttfb_ms=turn.tts_ttfb_ms,
+                total_ms=turn.total_e2e_ms,
+            )
+        else:
+            # VADMetrics, EOUMetrics, RealtimeModelMetrics — log but don't
+            # incorporate into turn timing.
+            logger.debug(
+                "other_metrics",
+                session_id=self.session_id,
+                metrics_type=type(metrics).__name__,
+            )
 
     def get_latest_metrics(self) -> dict:
         """Return latest turn metrics as dict for frontend overlay."""

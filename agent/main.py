@@ -10,7 +10,6 @@ This module starts the LiveKit AgentServer and wires together:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import threading
 from dataclasses import dataclass
@@ -18,9 +17,17 @@ from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 import structlog
+from livekit.agents import Agent, AgentSession
+from livekit.plugins import deepgram, groq, cartesia, silero, simli  # noqa: F401
 
+from src.agents.biology import BiologyTutorAgent
+from src.agents.math import MathTutorAgent
+from src.agents.physics import PhysicsTutorAgent
+from src.agents.router import SubjectRouterAgent
+from src.avatar.renderer import SimliAvatarAdapter
 from src.config import AppConfig
 from src.logging_setup import setup_logging
+from src.metrics import MetricsCollector
 
 logger = structlog.get_logger(__name__)
 
@@ -107,6 +114,28 @@ def health_check() -> dict:
     }
 
 
+_SUBJECT_AGENTS = {
+    "biology": BiologyTutorAgent,
+    "math": MathTutorAgent,
+    "physics": PhysicsTutorAgent,
+}
+
+
+def _resolve_agent(room_name: str) -> Agent:
+    """Parse subject from room name (tutor-{subject}-{timestamp}) and return
+    the matching subject tutor. Falls back to the router if unrecognized."""
+    parts = room_name.split("-")
+    if len(parts) >= 2:
+        subject_key = parts[1].lower()
+        agent_cls = _SUBJECT_AGENTS.get(subject_key)
+        if agent_cls is not None:
+            logger.info("direct_subject_routing", subject=subject_key)
+            return agent_cls()
+
+    logger.info("falling_back_to_router", room_name=room_name)
+    return SubjectRouterAgent()
+
+
 # ── LiveKit entrypoint ──────────────────────────────────────────────────────
 
 
@@ -115,13 +144,6 @@ async def entrypoint(ctx) -> None:
 
     Wires STT → LLM → TTS pipeline with Simli avatar and metrics collection.
     """
-    from livekit.agents import AgentSession
-    from livekit.plugins import deepgram, groq, cartesia, silero
-
-    from src.agents.router import SubjectRouterAgent
-    from src.avatar.renderer import SimliAvatarAdapter
-    from src.metrics import MetricsCollector
-
     config = AppConfig.from_env()
     session_id = ctx.room.name if hasattr(ctx, "room") else "unknown"
 
@@ -136,9 +158,17 @@ async def entrypoint(ctx) -> None:
         model=config.groq_model,
         temperature=config.groq_temperature,
     )
+    # WORKAROUND: groq.LLM inherits OpenAILLM._strict_tool_schema but doesn't
+    # expose it as a constructor arg. Llama models reject OpenAI strict tool schemas
+    # (required + empty properties). Pinned: livekit-agents~=1.4.4 in requirements.txt.
+    # Track: https://github.com/livekit/agents — remove once groq plugin exposes this.
+    llm._strict_tool_schema = False
+
     tts = cartesia.TTS(
         model=config.cartesia_model,
         voice=config.cartesia_voice_id,
+        speed=0.9,  # sonic-3 requires float 0.6–2.0; 1.0 = normal
+        text_pacing=True,
     )
 
     # Avatar
@@ -158,7 +188,6 @@ async def entrypoint(ctx) -> None:
         llm=llm,
         tts=tts,
         vad=silero.VAD.load(),
-        chat_ctx=None,
     )
 
     session.on("metrics_collected", metrics.on_metrics)
@@ -166,11 +195,17 @@ async def entrypoint(ctx) -> None:
     # Start avatar
     await avatar.start(session, ctx.room)
 
-    # Start the session with the router agent
+    # Resolve agent from room name — goes directly to the subject tutor
+    # when the frontend already selected a subject, falls back to router otherwise.
+    agent = _resolve_agent(session_id)
+
     await session.start(
         room=ctx.room,
-        agent=SubjectRouterAgent(),
+        agent=agent,
     )
+
+    # Initial greeting is triggered by the agent's on_enter() hook,
+    # which the framework calls once the session activity is fully ready.
 
     logger.info("session_started", session_id=session_id)
 

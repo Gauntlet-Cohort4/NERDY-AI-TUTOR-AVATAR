@@ -10,6 +10,7 @@ from typing import Optional
 
 import structlog
 
+from src.errors import ErrorSeverity, PipelineError, PipelineStage, handle_pipeline_error
 from src.types import AvatarRenderer  # noqa: F401 — re-export for convenience
 
 logger = structlog.get_logger(__name__)
@@ -26,8 +27,8 @@ class SimliAvatarAdapter:
         self,
         api_key: str,
         face_id: str,
-        max_session_length: int = 3600,
-        max_idle_time: int = 300,
+        max_session_length: int = 600,
+        max_idle_time: int = 30,
     ):
         self.api_key = api_key
         self.face_id = face_id
@@ -42,14 +43,15 @@ class SimliAvatarAdapter:
         so TTS audio drives the avatar's lip-sync and expressions.
         """
         try:
-            from livekit.plugins.simli import AvatarSession
+            from livekit.plugins.simli import AvatarSession, SimliConfig
 
-            self._session = AvatarSession(
+            simli_config = SimliConfig(
                 api_key=self.api_key,
                 face_id=self.face_id,
                 max_session_length=self.max_session_length,
                 max_idle_time=self.max_idle_time,
             )
+            self._session = AvatarSession(simli_config=simli_config)
             await self._session.start(session, room=room)
             logger.info(
                 "simli_avatar_started",
@@ -62,11 +64,13 @@ class SimliAvatarAdapter:
                 msg="livekit.plugins.simli not installed — avatar disabled",
             )
         except Exception as exc:
-            logger.error(
-                "simli_avatar_start_failed",
-                error=str(exc),
-                face_id=self.face_id,
+            error = PipelineError(
+                stage=PipelineStage.AVATAR,
+                severity=ErrorSeverity.DEGRADED,
+                message=f"Simli avatar failed to start: {exc}",
+                original_exception=exc,
             )
+            handle_pipeline_error(error)
 
     async def close(self) -> None:
         """Clean up avatar connection."""

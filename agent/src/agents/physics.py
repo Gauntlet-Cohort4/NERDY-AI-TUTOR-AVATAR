@@ -21,3 +21,11 @@ class PhysicsTutorAgent(Agent):
             grade_level=subject_config.grade_level,
             keyterm_count=len(subject_config.keyterms),
         )
+
+    async def on_enter(self) -> None:
+        """Greet the student with a physics-specific welcome."""
+        logger.info("physics_greeting_triggered")
+        self.session.generate_reply(
+            instructions="Welcome the student to the physics session about Newton's Third Law. "
+            "Ask an opening Socratic question about what happens when they push on something."
+        )

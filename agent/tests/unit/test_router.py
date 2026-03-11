@@ -79,31 +79,17 @@ class TestSubjectRouterAgentInstructions:
 
 
 class TestSubjectRouterAgentTools:
-    def test_has_select_biology_tool(self):
+    def test_has_select_subject_tool(self):
+        from src.agents.router import SubjectRouterAgent
+
+        # The consolidated select_subject tool replaces individual per-subject tools.
+        # Groq/Llama returns null args for parameterless tools, causing a crash in
+        # livekit-agents' prepare_function_arguments. A single tool with a subject
+        # parameter avoids this.
+        assert hasattr(SubjectRouterAgent, "select_subject")
+
+    def test_select_subject_is_callable(self):
         from src.agents.router import SubjectRouterAgent
 
         agent = SubjectRouterAgent()
-        # Tools registered via @function_tool are in agent._tools or passed via tools kwarg
-        # Check that the class has the method defined
-        assert hasattr(SubjectRouterAgent, "select_biology") or any(
-            "biology" in str(t).lower()
-            for t in (getattr(agent, "_tools", None) or [])
-        )
-
-    def test_has_select_math_tool(self):
-        from src.agents.router import SubjectRouterAgent
-
-        agent = SubjectRouterAgent()
-        assert hasattr(SubjectRouterAgent, "select_math") or any(
-            "math" in str(t).lower()
-            for t in (getattr(agent, "_tools", None) or [])
-        )
-
-    def test_has_select_physics_tool(self):
-        from src.agents.router import SubjectRouterAgent
-
-        agent = SubjectRouterAgent()
-        assert hasattr(SubjectRouterAgent, "select_physics") or any(
-            "physics" in str(t).lower()
-            for t in (getattr(agent, "_tools", None) or [])
-        )
+        assert callable(getattr(agent, "select_subject", None))

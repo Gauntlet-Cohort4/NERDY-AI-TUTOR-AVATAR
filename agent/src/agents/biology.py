@@ -21,3 +21,11 @@ class BiologyTutorAgent(Agent):
             grade_level=subject_config.grade_level,
             keyterm_count=len(subject_config.keyterms),
         )
+
+    async def on_enter(self) -> None:
+        """Greet the student with a biology-specific welcome."""
+        logger.info("biology_greeting_triggered")
+        self.session.generate_reply(
+            instructions="Welcome the student to the biology session about photosynthesis. "
+            "Ask an opening Socratic question to get them thinking about how plants make food."
+        )

@@ -47,15 +47,85 @@ def mock_config():
     )
 
 
+def _make_stt_event(duration: float = 0.25):
+    """Build a SimpleNamespace mimicking a MetricsCollectedEvent with STTMetrics."""
+    from livekit.agents.metrics import STTMetrics
+
+    return SimpleNamespace(
+        metrics=STTMetrics(
+            type="stt_metrics",
+            label="stt",
+            request_id="req-stt",
+            timestamp=0.0,
+            duration=duration,
+            audio_duration=duration,
+            streamed=True,
+        ),
+    )
+
+
+def _make_llm_event(ttft: float = 0.22, duration: float = 0.5):
+    """Build a SimpleNamespace mimicking a MetricsCollectedEvent with LLMMetrics."""
+    from livekit.agents.metrics import LLMMetrics
+
+    return SimpleNamespace(
+        metrics=LLMMetrics(
+            type="llm_metrics",
+            label="llm",
+            request_id="req-llm",
+            timestamp=0.0,
+            duration=duration,
+            ttft=ttft,
+            cancelled=False,
+            completion_tokens=0,
+            prompt_tokens=0,
+            prompt_cached_tokens=0,
+            total_tokens=0,
+            tokens_per_second=0.0,
+        ),
+    )
+
+
+def _make_tts_event(ttfb: float = 0.09, duration: float = 0.3):
+    """Build a SimpleNamespace mimicking a MetricsCollectedEvent with TTSMetrics."""
+    from livekit.agents.metrics import TTSMetrics
+
+    return SimpleNamespace(
+        metrics=TTSMetrics(
+            type="tts_metrics",
+            label="tts",
+            request_id="req-tts",
+            timestamp=0.0,
+            ttfb=ttfb,
+            duration=duration,
+            audio_duration=duration,
+            cancelled=False,
+            characters_count=0,
+            streamed=True,
+        ),
+    )
+
+
+def _send_full_turn(collector, stt_duration=0.25, llm_ttft=0.22, tts_ttfb=0.09):
+    """Send a complete STT -> LLM -> TTS metrics cycle, producing one TurnMetrics."""
+    collector.on_metrics(_make_stt_event(duration=stt_duration))
+    collector.on_metrics(_make_llm_event(ttft=llm_ttft))
+    collector.on_metrics(_make_tts_event(ttfb=tts_ttfb))
+
+
 @pytest.fixture
 def mock_metrics_event():
-    """A SimpleNamespace mimicking an AgentSession metrics event."""
-    return SimpleNamespace(
-        stt_duration=0.25,
-        llm_ttft=0.22,
-        tts_ttfb=0.09,
-        e2e_duration=0.65,
-    )
+    """A list of three events (STT, LLM, TTS) mimicking a full pipeline turn.
+
+    When all three are fed to ``on_metrics`` in order, the collector records
+    one ``TurnMetrics`` with stt=250ms, llm_ttft=220ms, tts_ttfb=90ms,
+    total_e2e=560ms (sum of stage timings).
+    """
+    return [
+        _make_stt_event(duration=0.25),
+        _make_llm_event(ttft=0.22),
+        _make_tts_event(ttfb=0.09),
+    ]
 
 
 @pytest.fixture

@@ -1,16 +1,19 @@
 """Tests for MetricsCollector.
 
 Requirement mapping:
-- test_metrics_collector_initial_state → Clean initialization
-- test_on_metrics_* → Per-turn metric capture
-- test_get_latest_metrics_* → Frontend overlay data
-- test_session_summary_* → Aggregate reporting
-"""
+- test_metrics_collector_initial_state -> Clean initialization
+- test_on_metrics_* -> Per-turn metric capture
+- test_get_latest_metrics_* -> Frontend overlay data
+- test_session_summary_* -> Aggregate reporting
 
-from types import SimpleNamespace
+In livekit-agents 1.4.x, ``metrics_collected`` fires individual metric events
+(STTMetrics, LLMMetrics, TTSMetrics, etc.).  The collector assembles a full
+``TurnMetrics`` snapshot each time a TTS metric arrives (last pipeline stage).
+"""
 
 import pytest
 from src.metrics import MetricsCollector
+from tests.conftest import _send_full_turn, _make_stt_event, _make_llm_event, _make_tts_event
 
 
 class TestMetricsCollectorInitialState:
@@ -22,18 +25,21 @@ class TestMetricsCollectorInitialState:
 
 class TestOnMetrics:
     def test_on_metrics_stores_turn(self, metrics_collector, mock_metrics_event):
-        metrics_collector.on_metrics(mock_metrics_event)
+        for event in mock_metrics_event:
+            metrics_collector.on_metrics(event)
         assert len(metrics_collector.turn_metrics) == 1
         turn = metrics_collector.turn_metrics[0]
         assert turn.turn_number == 1
         assert turn.stt_ms == pytest.approx(250.0)
         assert turn.llm_ttft_ms == pytest.approx(220.0)
         assert turn.tts_ttfb_ms == pytest.approx(90.0)
-        assert turn.total_e2e_ms == pytest.approx(650.0)
+        # total_e2e_ms is sum of stage timings: 250 + 220 + 90 = 560
+        assert turn.total_e2e_ms == pytest.approx(560.0)
 
     def test_on_metrics_increments_turn_number(self, metrics_collector, mock_metrics_event):
         for _ in range(3):
-            metrics_collector.on_metrics(mock_metrics_event)
+            for event in mock_metrics_event:
+                metrics_collector.on_metrics(event)
         turn_numbers = [t.turn_number for t in metrics_collector.turn_metrics]
         assert turn_numbers == [1, 2, 3]
 
@@ -44,23 +50,24 @@ class TestGetLatestMetrics:
 
     def test_get_latest_metrics_returns_last(self, metrics_collector, mock_metrics_event):
         for _ in range(3):
-            metrics_collector.on_metrics(mock_metrics_event)
+            for event in mock_metrics_event:
+                metrics_collector.on_metrics(event)
         latest = metrics_collector.get_latest_metrics()
         assert latest["turn"] == 3
 
     def test_get_latest_metrics_values_rounded(self, metrics_collector):
-        event = SimpleNamespace(
+        _send_full_turn(
+            metrics_collector,
             stt_duration=0.12345,
             llm_ttft=0.22222,
             tts_ttfb=0.09876,
-            e2e_duration=0.55555,
         )
-        metrics_collector.on_metrics(event)
         latest = metrics_collector.get_latest_metrics()
         assert latest["stt_ms"] == 123.5
         assert latest["llm_ttft_ms"] == 222.2
         assert latest["tts_ttfb_ms"] == 98.8
-        assert latest["total_e2e_ms"] == 555.5
+        # total = 123.45 + 222.22 + 98.76 = 444.43 -> rounded to 444.4
+        assert latest["total_e2e_ms"] == 444.4
 
 
 class TestSessionSummary:
@@ -69,13 +76,16 @@ class TestSessionSummary:
 
     def test_session_summary_computes_stats(self, metrics_collector):
         for i in range(1, 11):
-            event = SimpleNamespace(
-                stt_duration=0.1,
-                llm_ttft=0.1,
-                tts_ttfb=0.1,
-                e2e_duration=i * 0.1,  # 100ms, 200ms, ... 1000ms
+            # Vary the tts_ttfb so each turn has a different total e2e
+            # total_e2e = (stt + llm + tts) * 1000
+            # We want totals of 100ms, 200ms, ... 1000ms
+            # With stt=0.0 and llm=0.0 and tts_ttfb = i * 0.1
+            _send_full_turn(
+                metrics_collector,
+                stt_duration=0.0,
+                llm_ttft=0.0,
+                tts_ttfb=i * 0.1,
             )
-            metrics_collector.on_metrics(event)
 
         summary = metrics_collector.session_summary()
         assert summary["total_turns"] == 10
@@ -85,18 +95,17 @@ class TestSessionSummary:
         assert summary["pct_under_1000ms"] == pytest.approx(90.0)
 
     def test_session_summary_skips_zero_e2e(self, metrics_collector):
-        # Add turns with zero e2e (should be excluded)
-        for e2e_val in [0.0, 0.5, 0.0, 0.3]:
-            event = SimpleNamespace(
-                stt_duration=0.1,
-                llm_ttft=0.1,
-                tts_ttfb=0.1,
-                e2e_duration=e2e_val,
+        # Add turns with zero and non-zero e2e
+        for tts_val in [0.0, 0.5, 0.0, 0.3]:
+            _send_full_turn(
+                metrics_collector,
+                stt_duration=0.0,
+                llm_ttft=0.0,
+                tts_ttfb=tts_val,
             )
-            metrics_collector.on_metrics(event)
 
         summary = metrics_collector.session_summary()
-        # Only 2 non-zero e2e values: 500ms and 300ms
+        # 4 turns recorded, but only 2 non-zero e2e values: 500ms and 300ms
         assert summary["total_turns"] == 4
         assert summary["e2e_mean_ms"] == pytest.approx(400.0)
         assert summary["e2e_max_ms"] == pytest.approx(500.0)

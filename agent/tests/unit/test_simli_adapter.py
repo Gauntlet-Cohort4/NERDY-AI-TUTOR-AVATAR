@@ -16,11 +16,11 @@ class TestSimliAvatarAdapterInit:
 
     def test_default_max_session_length(self):
         adapter = SimliAvatarAdapter(api_key="key", face_id="face")
-        assert adapter.max_session_length == 3600
+        assert adapter.max_session_length == 600
 
     def test_default_max_idle_time(self):
         adapter = SimliAvatarAdapter(api_key="key", face_id="face")
-        assert adapter.max_idle_time == 300
+        assert adapter.max_idle_time == 30
 
     def test_custom_limits(self):
         adapter = SimliAvatarAdapter(

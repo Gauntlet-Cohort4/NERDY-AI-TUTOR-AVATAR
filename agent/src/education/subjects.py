@@ -79,3 +79,12 @@ SUBJECT_CONFIGS: dict[Subject, SubjectConfig] = {
 }
 
 logger.debug("subject_configs_loaded", subjects=list(SUBJECT_CONFIGS.keys()))
+
+
+def get_keyterms(subject: Subject) -> list[str]:
+    """Return keyterm list for a subject.
+
+    Returns an empty list if the subject is not found in SUBJECT_CONFIGS.
+    """
+    config = SUBJECT_CONFIGS.get(subject)
+    return list(config.keyterms) if config else []

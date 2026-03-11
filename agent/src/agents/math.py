@@ -1,8 +1,8 @@
 """MathTutorAgent — fractions Socratic tutor (6th grade)."""
 
 import structlog
-from livekit.agents import Agent
 
+from src.agents.base import SubjectTutorAgent
 from src.education.prompts import get_system_prompt
 from src.education.subjects import SUBJECT_CONFIGS
 from src.types import Subject
@@ -10,8 +10,10 @@ from src.types import Subject
 logger = structlog.get_logger(__name__)
 
 
-class MathTutorAgent(Agent):
+class MathTutorAgent(SubjectTutorAgent):
     """Socratic tutor for 6th-grade fractions using Deepgram Nova-3."""
+
+    _subject = Subject.MATH
 
     def __init__(self) -> None:
         subject_config = SUBJECT_CONFIGS[Subject.MATH]
@@ -25,6 +27,7 @@ class MathTutorAgent(Agent):
     async def on_enter(self) -> None:
         """Greet the student with a math-specific welcome."""
         logger.info("math_greeting_triggered")
+        self._update_stt_keyterms()
         self.session.generate_reply(
             instructions="Welcome the student to the math session about fractions. "
             "Ask an opening Socratic question to get them thinking about what fractions represent."

@@ -26,6 +26,9 @@ from src.agents.physics import PhysicsTutorAgent
 from src.agents.router import SubjectRouterAgent
 from src.avatar.renderer import SimliAvatarAdapter
 from src.config import AppConfig
+from src.education.history import ConversationHistory
+from src.education.tracker import ConversationTracker
+from src.errors import ErrorSeverity, PipelineError, PipelineStage, handle_pipeline_error
 from src.logging_setup import setup_logging
 from src.metrics import MetricsCollector
 
@@ -191,6 +194,42 @@ async def entrypoint(ctx) -> None:
     )
 
     session.on("metrics_collected", metrics.on_metrics)
+
+    def _on_session_error(error_event) -> None:
+        """Handle session-level errors via the pipeline error handler."""
+        raw_error = error_event.error
+        pipeline_error = PipelineError(
+            stage=PipelineStage.SESSION,
+            severity=ErrorSeverity.DEGRADED,
+            message=str(raw_error),
+            original_exception=raw_error if isinstance(raw_error, Exception) else None,
+        )
+        handle_pipeline_error(pipeline_error)
+
+    session.on("error", _on_session_error)
+
+    # Conversation tracker — hooks session events for background summarization
+    history = ConversationHistory(
+        max_turns=config.max_conversation_turns,
+        summarization_threshold=config.summarization_threshold,
+        token_budget=config.token_budget,
+    )
+
+    async def llm_summarizer(messages: list[dict]) -> str:
+        """Background summarization via Groq — fire-and-forget, non-blocking."""
+        from groq import AsyncGroq
+
+        client = AsyncGroq()
+        response = await client.chat.completions.create(
+            model=config.groq_model,
+            messages=messages,
+            max_tokens=200,
+            temperature=0.3,
+        )
+        return response.choices[0].message.content or ""
+
+    tracker = ConversationTracker(history=history, llm_callable=llm_summarizer)
+    session.on("conversation_item_added", tracker.on_conversation_item)
 
     # Start avatar
     await avatar.start(session, ctx.room)

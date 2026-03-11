@@ -4,8 +4,8 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
 import { createLogger } from "@/lib/logger";
-import { getToken } from "@/lib/livekit";
-import type { Subject, TurnMetrics, ConnectionState } from "@/lib/types";
+import { getToken, computeMetricsAverages } from "@/lib/livekit";
+import type { Subject, TurnMetrics, MetricsAverages, ConnectionState } from "@/lib/types";
 import AvatarDisplay from "@/components/AvatarDisplay";
 import ConnectionStatus from "@/components/ConnectionStatus";
 import LatencyOverlay from "@/components/LatencyOverlay";
@@ -37,6 +37,9 @@ function SessionContent() {
   const [isLoadingToken, setIsLoadingToken] = useState(true);
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [latestMetrics, setLatestMetrics] = useState<TurnMetrics | undefined>(undefined);
+  const [metricsHistory, setMetricsHistory] = useState<readonly TurnMetrics[]>([]);
+  const [metricsAverages, setMetricsAverages] = useState<MetricsAverages | null>(null);
+  const [metricsVisible, setMetricsVisible] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
@@ -76,6 +79,19 @@ function SessionContent() {
 
   const handleMetricsUpdate = useCallback((metrics: TurnMetrics) => {
     setLatestMetrics(metrics);
+    setMetricsHistory((prev) => {
+      const updated = [...prev, metrics];
+      setMetricsAverages(computeMetricsAverages(updated));
+      logger.debug("metrics_history_updated", { turn_count: updated.length });
+      return updated;
+    });
+  }, []);
+
+  const handleToggleMetrics = useCallback(() => {
+    setMetricsVisible((prev) => {
+      logger.info("metrics_visibility_toggled", { visible: !prev });
+      return !prev;
+    });
   }, []);
 
   const handleEndSession = useCallback(() => {
@@ -152,7 +168,11 @@ function SessionContent() {
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="relative w-full max-w-3xl">
             <AvatarDisplay />
-            <LatencyOverlay metrics={latestMetrics} />
+            <LatencyOverlay
+              metrics={latestMetrics}
+              averages={metricsAverages}
+              visible={metricsVisible}
+            />
           </div>
         </div>
         <footer className="flex items-center justify-center px-6 py-5 border-t border-gray-800">
@@ -160,6 +180,8 @@ function SessionContent() {
             isConnected={isConnected}
             onStart={handleStartSession}
             onEnd={handleEndSession}
+            metricsVisible={metricsVisible}
+            onToggleMetrics={handleToggleMetrics}
           />
         </footer>
       </main>

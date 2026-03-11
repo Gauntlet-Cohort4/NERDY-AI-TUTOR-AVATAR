@@ -85,9 +85,9 @@ pytest tests/unit/ -v --cov=src --cov-report=term-missing
 # Backend integration tests (requires API keys)
 pytest tests/integration/ -v
 
-# Frontend E2E tests
-cd frontend
-npx playwright test
+# Frontend E2E tests (currently deferred — see note below)
+# cd frontend
+# npx playwright test
 
 # Lint everything
 bash scripts/lint.sh
@@ -127,6 +127,10 @@ docker compose up --build
 docker compose build agent
 docker compose build frontend
 ```
+
+## Deferred Work
+
+- **Playwright E2E tests.** Frontend end-to-end tests via Playwright are deferred. The test infrastructure (Playwright config, CI job) is not yet set up. Backend unit and integration tests provide current coverage.
 
 ## Known Limitations
 

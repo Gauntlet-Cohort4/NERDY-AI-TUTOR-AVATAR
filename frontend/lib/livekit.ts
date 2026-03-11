@@ -1,5 +1,5 @@
 import { ConnectionState as LKConnectionState } from "livekit-client";
-import type { ConnectionState, TurnMetrics } from "./types";
+import type { ConnectionState, MetricsAverages, TurnMetrics } from "./types";
 import { createLogger } from "./logger";
 
 const logger = createLogger("livekit");
@@ -59,6 +59,41 @@ export async function getToken(
 
   logger.info("token_fetched", { subject });
   return { token, url };
+}
+
+/**
+ * Compute running averages from an array of TurnMetrics.
+ * Returns a new MetricsAverages object (immutable — no mutation).
+ */
+export function computeMetricsAverages(
+  history: readonly TurnMetrics[]
+): MetricsAverages | null {
+  if (history.length === 0) return null;
+
+  const count = history.length;
+  const sum = history.reduce(
+    (acc, m) => ({
+      stt_ms: acc.stt_ms + m.stt_ms,
+      llm_ttft_ms: acc.llm_ttft_ms + m.llm_ttft_ms,
+      tts_ttfb_ms: acc.tts_ttfb_ms + m.tts_ttfb_ms,
+      avatar_render_ms:
+        m.avatar_render_ms !== null
+          ? acc.avatar_render_ms + m.avatar_render_ms
+          : acc.avatar_render_ms,
+      avatar_count: m.avatar_render_ms !== null ? acc.avatar_count + 1 : acc.avatar_count,
+      total_e2e_ms: acc.total_e2e_ms + m.total_e2e_ms,
+    }),
+    { stt_ms: 0, llm_ttft_ms: 0, tts_ttfb_ms: 0, avatar_render_ms: 0, avatar_count: 0, total_e2e_ms: 0 }
+  );
+
+  return {
+    stt_ms: sum.stt_ms / count,
+    llm_ttft_ms: sum.llm_ttft_ms / count,
+    tts_ttfb_ms: sum.tts_ttfb_ms / count,
+    avatar_render_ms: sum.avatar_count > 0 ? sum.avatar_render_ms / sum.avatar_count : null,
+    total_e2e_ms: sum.total_e2e_ms / count,
+    turn_count: count,
+  };
 }
 
 /**

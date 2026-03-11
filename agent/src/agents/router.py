@@ -40,9 +40,7 @@ class SubjectRouterAgent(Agent):
     async def select_subject(
         self,
         ctx: RunContext,
-        subject: Annotated[
-            str, "The subject the student chose: 'biology', 'math', or 'physics'"
-        ],
+        subject: Annotated[str, "The subject the student chose: 'biology', 'math', or 'physics'"],
     ) -> str:
         """Route the student to the appropriate subject tutor."""
         subject_lower = subject.strip().lower()
@@ -69,7 +67,4 @@ class SubjectRouterAgent(Agent):
             return "Switching you to our Physics tutor now!"
 
         logger.warning("unknown_subject_requested", subject=subject)
-        return (
-            f"I don't have a tutor for '{subject}' yet. "
-            "Please choose Biology, Math, or Physics!"
-        )
+        return f"I don't have a tutor for '{subject}' yet. Please choose Biology, Math, or Physics!"

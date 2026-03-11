@@ -12,6 +12,7 @@ export default function LatencyOverlay({ metrics }: LatencyOverlayProps) {
       <div>STT: {metrics.stt_ms.toFixed(0)}ms</div>
       <div>LLM TTFT: {metrics.llm_ttft_ms.toFixed(0)}ms</div>
       <div>TTS TTFB: {metrics.tts_ttfb_ms.toFixed(0)}ms</div>
+      <div>Avatar: {metrics.avatar_render_ms !== null ? `${metrics.avatar_render_ms.toFixed(0)}ms` : "—"}</div>
       <div>Total E2E: {metrics.total_e2e_ms.toFixed(0)}ms</div>
     </div>
   );

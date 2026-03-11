@@ -9,6 +9,7 @@ Requirement mapping:
 """
 
 import pytest
+
 from src.config import AppConfig
 
 
@@ -33,13 +34,21 @@ class TestConfigFailsFast:
     def test_config_fails_on_multiple_missing_vars(self, monkeypatch):
         monkeypatch.setenv("LIVEKIT_URL", "wss://test.livekit.cloud")
         monkeypatch.setenv("LIVEKIT_API_KEY", "test")
-        # Missing: LIVEKIT_API_SECRET, DEEPGRAM_API_KEY, GROQ_API_KEY, CARTESIA_API_KEY, SIMLI_API_KEY
-        for key in ["LIVEKIT_API_SECRET", "DEEPGRAM_API_KEY", "GROQ_API_KEY", "CARTESIA_API_KEY", "SIMLI_API_KEY"]:
+        # Missing: LIVEKIT_API_SECRET, DEEPGRAM_API_KEY, GROQ_API_KEY,
+        # CARTESIA_API_KEY, SIMLI_API_KEY
+        missing_keys = [
+            "LIVEKIT_API_SECRET",
+            "DEEPGRAM_API_KEY",
+            "GROQ_API_KEY",
+            "CARTESIA_API_KEY",
+            "SIMLI_API_KEY",
+        ]
+        for key in missing_keys:
             monkeypatch.delenv(key, raising=False)
         with pytest.raises(EnvironmentError) as exc_info:
             AppConfig.from_env()
         error_msg = str(exc_info.value)
-        for key in ["LIVEKIT_API_SECRET", "DEEPGRAM_API_KEY", "GROQ_API_KEY", "CARTESIA_API_KEY", "SIMLI_API_KEY"]:
+        for key in missing_keys:
             assert key in error_msg
 
 

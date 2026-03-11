@@ -6,11 +6,9 @@ Requirement mapping:
 - test_max_retries_per_stage → Retry budget per stage
 """
 
-import pytest
 from src.errors import (
-    ErrorSeverity,
-    FALLBACK_RESPONSES,
     MAX_RETRIES,
+    ErrorSeverity,
     PipelineError,
     PipelineStage,
     handle_pipeline_error,

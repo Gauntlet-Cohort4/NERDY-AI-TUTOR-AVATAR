@@ -9,7 +9,6 @@ Requirement mapping:
 - test_response_length_constraint         → 2-sentence rule is mentioned
 """
 
-import pytest
 from src.types import Subject
 
 
@@ -26,9 +25,7 @@ class TestGetSystemPromptBasics:
 
         for subject in Subject:
             result = get_system_prompt(subject)
-            assert len(result) > 100, (
-                f"Prompt for {subject} is too short: {len(result)} chars"
-            )
+            assert len(result) > 100, f"Prompt for {subject} is too short: {len(result)} chars"
 
     def test_different_prompts_per_subject(self):
         from src.education.prompts import get_system_prompt
@@ -67,8 +64,9 @@ class TestSocraticKeywords:
         assert any(term in prompt for term in socratic_terms)
 
     def test_prompts_do_not_instruct_to_give_direct_answers(self):
-        from src.education.prompts import get_system_prompt
         import re
+
+        from src.education.prompts import get_system_prompt
 
         for subject in Subject:
             prompt = get_system_prompt(subject).lower()

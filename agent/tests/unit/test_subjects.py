@@ -12,6 +12,7 @@ Requirement mapping:
 """
 
 import pytest
+
 from src.types import Subject, SubjectConfig
 
 
@@ -43,12 +44,8 @@ class TestSubjectConfigKeyterms:
 
         for subject, config in SUBJECT_CONFIGS.items():
             assert config.keyterms, f"Empty keyterms for {subject}"
-            assert isinstance(config.keyterms, tuple), (
-                f"keyterms must be a tuple for {subject}"
-            )
-            assert len(config.keyterms) >= 5, (
-                f"Expected at least 5 keyterms for {subject}"
-            )
+            assert isinstance(config.keyterms, tuple), f"keyterms must be a tuple for {subject}"
+            assert len(config.keyterms) >= 5, f"Expected at least 5 keyterms for {subject}"
 
     def test_biology_keyterms_content(self):
         from src.education.subjects import SUBJECT_CONFIGS

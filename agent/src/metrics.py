@@ -15,6 +15,9 @@ accumulate individual stage timings and assemble ``TurnMetrics`` on demand.
 
 from __future__ import annotations
 
+import json
+from typing import TYPE_CHECKING
+
 import structlog
 from livekit.agents.metrics import (
     LLMMetrics,
@@ -24,7 +27,13 @@ from livekit.agents.metrics import (
 
 from src.types import TurnMetrics
 
+if TYPE_CHECKING:
+    from livekit.rtc import Room
+
 logger = structlog.get_logger(__name__)
+
+# Data channel topic the frontend subscribes to (see SessionInner.tsx)
+_METRICS_TOPIC = "metrics"
 
 
 class MetricsCollector:
@@ -34,10 +43,15 @@ class MetricsCollector:
     the latest value for each stage and periodically assemble ``TurnMetrics``
     snapshots when a TTS metric arrives (chosen because TTS is the last stage
     in the STT -> LLM -> TTS pipeline).
+
+    When a ``room`` reference is provided, completed turn metrics are
+    automatically published to the LiveKit data channel on the ``"metrics"``
+    topic so the frontend ``LatencyOverlay`` can display them in real time.
     """
 
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, room: Room | None = None):
         self.session_id = session_id
+        self._room: Room | None = room
         self.turn_metrics: list[TurnMetrics] = []
         self._current_turn = 0
 
@@ -82,10 +96,9 @@ class MetricsCollector:
                 llm_ttft_ms=self._latest_llm_ttft * 1000,
                 tts_ttfb_ms=self._latest_tts_ttfb * 1000,
                 total_e2e_ms=(
-                    self._latest_stt_duration
-                    + self._latest_llm_ttft
-                    + self._latest_tts_ttfb
-                ) * 1000,
+                    self._latest_stt_duration + self._latest_llm_ttft + self._latest_tts_ttfb
+                )
+                * 1000,
             )
             self.turn_metrics.append(turn)
 
@@ -98,6 +111,9 @@ class MetricsCollector:
                 tts_ttfb_ms=turn.tts_ttfb_ms,
                 total_ms=turn.total_e2e_ms,
             )
+
+            # Publish to data channel so the frontend overlay updates in real time
+            self._publish_turn_metrics(turn)
         else:
             # VADMetrics, EOUMetrics, RealtimeModelMetrics — log but don't
             # incorporate into turn timing.
@@ -105,6 +121,46 @@ class MetricsCollector:
                 "other_metrics",
                 session_id=self.session_id,
                 metrics_type=type(metrics).__name__,
+            )
+
+    def _publish_turn_metrics(self, turn: TurnMetrics) -> None:
+        """Publish a single turn's metrics to the LiveKit data channel.
+
+        The payload matches the ``TurnMetrics`` interface expected by the
+        frontend ``parseMetricsMessage()`` function: ``turn``, ``stt_ms``,
+        ``llm_ttft_ms``, ``tts_ttfb_ms``, ``total_e2e_ms``.
+
+        Publishing is fire-and-forget — a failure here must never crash the
+        pipeline.  If no room is attached, the call is silently skipped.
+        """
+        if self._room is None:
+            return
+
+        payload = json.dumps({
+            "turn": turn.turn_number,
+            "stt_ms": round(turn.stt_ms, 1),
+            "llm_ttft_ms": round(turn.llm_ttft_ms, 1),
+            "tts_ttfb_ms": round(turn.tts_ttfb_ms, 1),
+            "total_e2e_ms": round(turn.total_e2e_ms, 1),
+        })
+
+        try:
+            self._room.local_participant.publish_data(
+                payload,
+                reliable=True,
+                topic=_METRICS_TOPIC,
+            )
+            logger.debug(
+                "metrics_published",
+                session_id=self.session_id,
+                turn=turn.turn_number,
+            )
+        except Exception:
+            logger.warning(
+                "metrics_publish_failed",
+                session_id=self.session_id,
+                turn=turn.turn_number,
+                exc_info=True,
             )
 
     def get_latest_metrics(self) -> dict:
@@ -136,10 +192,6 @@ class MetricsCollector:
             "e2e_median_ms": round(s[len(s) // 2], 1),
             "e2e_p95_ms": round(s[min(p95_idx, len(s) - 1)], 1),
             "e2e_max_ms": round(max(e2e), 1),
-            "pct_under_500ms": round(
-                sum(1 for v in e2e if v < 500) / len(e2e) * 100, 1
-            ),
-            "pct_under_1000ms": round(
-                sum(1 for v in e2e if v < 1000) / len(e2e) * 100, 1
-            ),
+            "pct_under_500ms": round(sum(1 for v in e2e if v < 500) / len(e2e) * 100, 1),
+            "pct_under_1000ms": round(sum(1 for v in e2e if v < 1000) / len(e2e) * 100, 1),
         }

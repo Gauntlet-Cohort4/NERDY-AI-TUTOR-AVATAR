@@ -8,8 +8,8 @@ Requirement mapping:
 - test_each_is_agent_subclass        → all agents extend livekit Agent
 """
 
-import pytest
 from livekit.agents import Agent
+
 from src.types import Subject
 
 
@@ -35,9 +35,7 @@ class TestBiologyTutorAgent:
         from src.agents.biology import BiologyTutorAgent
 
         agent = BiologyTutorAgent()
-        instructions = getattr(agent, "_instructions", None) or getattr(
-            agent, "instructions", None
-        )
+        instructions = getattr(agent, "_instructions", None) or getattr(agent, "instructions", None)
         assert instructions, "BiologyTutorAgent must have non-empty instructions"
 
     def test_instructions_match_system_prompt(self):
@@ -83,9 +81,7 @@ class TestMathTutorAgent:
         from src.agents.math import MathTutorAgent
 
         agent = MathTutorAgent()
-        instructions = getattr(agent, "_instructions", None) or getattr(
-            agent, "instructions", None
-        )
+        instructions = getattr(agent, "_instructions", None) or getattr(agent, "instructions", None)
         assert instructions, "MathTutorAgent must have non-empty instructions"
 
     def test_instructions_match_system_prompt(self):
@@ -131,9 +127,7 @@ class TestPhysicsTutorAgent:
         from src.agents.physics import PhysicsTutorAgent
 
         agent = PhysicsTutorAgent()
-        instructions = getattr(agent, "_instructions", None) or getattr(
-            agent, "instructions", None
-        )
+        instructions = getattr(agent, "_instructions", None) or getattr(agent, "instructions", None)
         assert instructions, "PhysicsTutorAgent must have non-empty instructions"
 
     def test_instructions_match_system_prompt(self):

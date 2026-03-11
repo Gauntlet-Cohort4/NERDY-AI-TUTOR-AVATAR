@@ -11,9 +11,13 @@ In livekit-agents 1.4.x, ``metrics_collected`` fires individual metric events
 ``TurnMetrics`` snapshot each time a TTS metric arrives (last pipeline stage).
 """
 
+import json
+from unittest.mock import MagicMock
+
 import pytest
-from src.metrics import MetricsCollector
-from tests.conftest import _send_full_turn, _make_stt_event, _make_llm_event, _make_tts_event
+
+from src.metrics import MetricsCollector, _METRICS_TOPIC
+from tests.conftest import _send_full_turn
 
 
 class TestMetricsCollectorInitialState:
@@ -109,3 +113,84 @@ class TestSessionSummary:
         assert summary["total_turns"] == 4
         assert summary["e2e_mean_ms"] == pytest.approx(400.0)
         assert summary["e2e_max_ms"] == pytest.approx(500.0)
+
+
+def _make_mock_room():
+    """Create a mock Room with a local_participant that records publish_data calls."""
+    room = MagicMock()
+    room.local_participant = MagicMock()
+    room.local_participant.publish_data = MagicMock()
+    return room
+
+
+class TestPublishMetrics:
+    """Tests for data channel publishing."""
+
+    def test_publish_called_on_tts_event(self):
+        """Completing a turn (TTS event) publishes metrics to the data channel."""
+        room = _make_mock_room()
+        collector = MetricsCollector(session_id="pub-test", room=room)
+
+        _send_full_turn(collector, stt_duration=0.25, llm_ttft=0.22, tts_ttfb=0.09)
+
+        room.local_participant.publish_data.assert_called_once()
+        call_args = room.local_participant.publish_data.call_args
+        payload = json.loads(call_args[0][0])
+
+        assert payload["turn"] == 1
+        assert payload["stt_ms"] == 250.0
+        assert payload["llm_ttft_ms"] == 220.0
+        assert payload["tts_ttfb_ms"] == 90.0
+        assert payload["total_e2e_ms"] == 560.0
+        assert call_args[1]["reliable"] is True
+        assert call_args[1]["topic"] == _METRICS_TOPIC
+
+    def test_publish_skipped_when_no_room(self):
+        """Without a room reference, publishing is silently skipped."""
+        collector = MetricsCollector(session_id="no-room")
+        _send_full_turn(collector, stt_duration=0.25, llm_ttft=0.22, tts_ttfb=0.09)
+        assert len(collector.turn_metrics) == 1
+
+    def test_publish_failure_does_not_crash_pipeline(self):
+        """If publish_data raises, the turn is still recorded."""
+        room = _make_mock_room()
+        room.local_participant.publish_data.side_effect = RuntimeError("network down")
+        collector = MetricsCollector(session_id="fail-test", room=room)
+
+        _send_full_turn(collector, stt_duration=0.1, llm_ttft=0.1, tts_ttfb=0.1)
+
+        assert len(collector.turn_metrics) == 1
+        assert collector.turn_metrics[0].turn_number == 1
+
+    def test_publish_multiple_turns(self):
+        """Each completed turn triggers a separate publish call."""
+        room = _make_mock_room()
+        collector = MetricsCollector(session_id="multi-test", room=room)
+
+        for _ in range(3):
+            _send_full_turn(collector, stt_duration=0.1, llm_ttft=0.1, tts_ttfb=0.1)
+
+        assert room.local_participant.publish_data.call_count == 3
+
+        for i, call in enumerate(
+            room.local_participant.publish_data.call_args_list, 1
+        ):
+            payload = json.loads(call[0][0])
+            assert payload["turn"] == i
+
+    def test_publish_payload_values_rounded(self):
+        """Published payload values are rounded to 1 decimal place."""
+        room = _make_mock_room()
+        collector = MetricsCollector(session_id="round-test", room=room)
+
+        _send_full_turn(
+            collector, stt_duration=0.12345, llm_ttft=0.22222, tts_ttfb=0.09876
+        )
+
+        payload = json.loads(
+            room.local_participant.publish_data.call_args[0][0]
+        )
+        assert payload["stt_ms"] == 123.5
+        assert payload["llm_ttft_ms"] == 222.2
+        assert payload["tts_ttfb_ms"] == 98.8
+        assert payload["total_e2e_ms"] == 444.4

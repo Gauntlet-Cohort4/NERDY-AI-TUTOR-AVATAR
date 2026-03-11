@@ -7,8 +7,6 @@ Requirement mapping:
 - test_is_agent_subclass           → SubjectRouterAgent extends livekit Agent
 """
 
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
 from livekit.agents import Agent
 
 
@@ -44,9 +42,7 @@ class TestSubjectRouterAgentInstructions:
 
         agent = SubjectRouterAgent()
         # Access via private attribute since livekit Agent stores it there
-        instructions = getattr(agent, "_instructions", None) or getattr(
-            agent, "instructions", None
-        )
+        instructions = getattr(agent, "_instructions", None) or getattr(agent, "instructions", None)
         assert instructions, "Router agent must have non-empty instructions"
         assert len(str(instructions)) > 20
 

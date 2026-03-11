@@ -5,6 +5,7 @@ export interface TurnMetrics {
   stt_ms: number;
   llm_ttft_ms: number;
   tts_ttfb_ms: number;
+  avatar_render_ms: number | null;
   total_e2e_ms: number;
 }
 

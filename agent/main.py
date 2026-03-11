@@ -14,11 +14,11 @@ import json
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import structlog
 from livekit.agents import Agent, AgentSession
-from livekit.plugins import deepgram, groq, cartesia, silero, simli  # noqa: F401
+from livekit.plugins import cartesia, deepgram, groq, silero, simli  # noqa: F401
 
 from src.agents.biology import BiologyTutorAgent
 from src.agents.math import MathTutorAgent
@@ -179,8 +179,8 @@ async def entrypoint(ctx) -> None:
         max_idle_time=config.simli_max_idle_time,
     )
 
-    # Metrics
-    metrics = MetricsCollector(session_id=session_id)
+    # Metrics — pass the room so metrics are published to the data channel
+    metrics = MetricsCollector(session_id=session_id, room=ctx.room)
 
     # Create and start session
     session = AgentSession(

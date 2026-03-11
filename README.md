@@ -127,3 +127,26 @@ docker compose up --build
 docker compose build agent
 docker compose build frontend
 ```
+
+## Known Limitations
+
+- **Single concurrent session per agent instance.** Each agent process handles one LiveKit room at a time. Horizontal scaling requires multiple agent instances.
+- **English only.** Deepgram Nova-3 STT and Cartesia TTS are configured for English. The system prompts and keyterm lists are English-only.
+- **Fixed subject set.** Only Biology, Math, and Physics are available. Adding a new subject requires a new tutor agent, system prompt, and subject config entry.
+- **Simli avatar session length limits.** Simli imposes per-session duration caps. Long tutoring sessions may require reconnection logic (not currently implemented).
+- **Groq rate limits.** The Groq free tier enforces requests-per-minute and tokens-per-minute limits. High-frequency usage may hit throttling.
+- **No persistent conversation history.** Conversation context is held in memory for the duration of a session and discarded when the session ends. There is no cross-session persistence.
+
+## Cost Analysis
+
+Estimated per-API costs for running the tutor. All figures are approximate and subject to change -- check each provider's pricing page for current rates.
+
+| Service | Pricing Model | Estimated Cost | Notes |
+|---|---|---|---|
+| Deepgram (STT) | Per minute of audio | ~$0.0043/min (Nova-3, pay-as-you-go) | $200 free credit on signup |
+| Groq (LLM) | Per token | Free tier available; paid ~$0.59/M input, $0.79/M output (Llama 3.3 70B) | Free tier has rate limits |
+| Cartesia (TTS) | Per character | ~$0.85 per 1M characters (Sonic) | Usage-based after free tier |
+| Simli (Avatar) | Per minute of video | Free tier: 50 min/month + $10 credit | Paid plans for higher volume |
+| LiveKit (Transport) | Per participant-minute | Cloud free tier available; ~$0.004/participant-min after | Self-hosted option eliminates this cost |
+
+A typical 10-minute tutoring session uses roughly: 10 min STT, 1-2K LLM tokens, 3-5K TTS characters, and 10 min avatar rendering. Most development and light usage fits comfortably within free tiers.

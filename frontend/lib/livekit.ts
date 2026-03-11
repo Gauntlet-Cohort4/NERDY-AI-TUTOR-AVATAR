@@ -98,6 +98,7 @@ export function parseMetricsMessage(data: Uint8Array): TurnMetrics | null {
       stt_ms: obj.stt_ms,
       llm_ttft_ms: obj.llm_ttft_ms,
       tts_ttfb_ms: obj.tts_ttfb_ms,
+      avatar_render_ms: isValidNumber(obj.avatar_render_ms) ? obj.avatar_render_ms : null,
       total_e2e_ms: obj.total_e2e_ms,
     };
   } catch (err) {

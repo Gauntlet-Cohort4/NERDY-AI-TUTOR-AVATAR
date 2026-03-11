@@ -72,9 +72,7 @@ class AppConfig:
         ]
         missing = [k for k in required if not os.getenv(k)]
         if missing:
-            raise EnvironmentError(
-                f"Missing required environment variables: {', '.join(missing)}"
-            )
+            raise EnvironmentError(f"Missing required environment variables: {', '.join(missing)}")
 
         config = cls(
             livekit_url=os.environ["LIVEKIT_URL"],

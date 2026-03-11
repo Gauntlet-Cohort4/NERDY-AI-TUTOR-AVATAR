@@ -8,8 +8,9 @@ Requirement mapping:
 from unittest.mock import AsyncMock
 
 import pytest
-from src.types import AvatarRenderer
+
 from src.avatar.renderer import SimliAvatarAdapter
+from src.types import AvatarRenderer
 
 
 class TestAvatarRendererProtocol:

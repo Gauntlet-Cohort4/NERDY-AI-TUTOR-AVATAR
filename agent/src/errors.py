@@ -42,9 +42,7 @@ class PipelineError:
             "message": self.message,
             "retry_count": self.retry_count,
             "exception_type": (
-                type(self.original_exception).__name__
-                if self.original_exception
-                else None
+                type(self.original_exception).__name__ if self.original_exception else None
             ),
         }
 
@@ -69,9 +67,5 @@ def handle_pipeline_error(error: PipelineError) -> str:
     """Central error handler. Logs the error and returns the fallback response."""
     logger.error("pipeline_error", **error.to_log_dict())
     if error.retry_count < MAX_RETRIES.get(error.stage, 1):
-        logger.info(
-            "will_retry", stage=error.stage.value, attempt=error.retry_count + 1
-        )
-    return FALLBACK_RESPONSES.get(
-        error.stage, "Let me think about that for a moment..."
-    )
+        logger.info("will_retry", stage=error.stage.value, attempt=error.retry_count + 1)
+    return FALLBACK_RESPONSES.get(error.stage, "Let me think about that for a moment...")

@@ -9,7 +9,7 @@ Token estimation: ~4 characters per token (rough English average).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Awaitable
+from typing import Awaitable, Callable
 
 import structlog
 
@@ -151,7 +151,9 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // _CHARS_PER_TOKEN) if text else 0
 
 
-def _turns_to_chat_dicts(turns: tuple[ConversationTurn, ...] | list[ConversationTurn]) -> list[dict]:
+def _turns_to_chat_dicts(
+    turns: tuple[ConversationTurn, ...] | list[ConversationTurn],
+) -> list[dict]:
     result = []
     for turn in turns:
         role = _ROLE_MAP.get(turn.role, turn.role)

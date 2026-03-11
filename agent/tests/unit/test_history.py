@@ -9,8 +9,8 @@ Requirement mapping:
 - test_empty_history               → edge cases with no turns
 """
 
-import asyncio
 import pytest
+
 from src.types import ConversationTurn
 
 
@@ -22,17 +22,13 @@ class TestConversationHistoryInit:
     def test_instantiation(self):
         from src.education.history import ConversationHistory
 
-        history = ConversationHistory(
-            max_turns=10, summarization_threshold=8, token_budget=2000
-        )
+        history = ConversationHistory(max_turns=10, summarization_threshold=8, token_budget=2000)
         assert history is not None
 
     def test_initial_state_is_empty(self):
         from src.education.history import ConversationHistory
 
-        history = ConversationHistory(
-            max_turns=10, summarization_threshold=8, token_budget=2000
-        )
+        history = ConversationHistory(max_turns=10, summarization_threshold=8, token_budget=2000)
         assert history.get_context_window() == []
         assert history.to_chat_context() == []
 
@@ -41,9 +37,7 @@ class TestAddTurnImmutability:
     def test_add_turn_returns_new_instance(self):
         from src.education.history import ConversationHistory
 
-        history = ConversationHistory(
-            max_turns=10, summarization_threshold=8, token_budget=2000
-        )
+        history = ConversationHistory(max_turns=10, summarization_threshold=8, token_budget=2000)
         turn = make_turn("student", "What is photosynthesis?", 1)
         new_history = history.add_turn(turn)
 
@@ -52,9 +46,7 @@ class TestAddTurnImmutability:
     def test_original_history_unchanged_after_add_turn(self):
         from src.education.history import ConversationHistory
 
-        history = ConversationHistory(
-            max_turns=10, summarization_threshold=8, token_budget=2000
-        )
+        history = ConversationHistory(max_turns=10, summarization_threshold=8, token_budget=2000)
         turn = make_turn("student", "What is photosynthesis?", 1)
         _ = history.add_turn(turn)
 
@@ -64,9 +56,7 @@ class TestAddTurnImmutability:
     def test_new_history_contains_added_turn(self):
         from src.education.history import ConversationHistory
 
-        history = ConversationHistory(
-            max_turns=10, summarization_threshold=8, token_budget=2000
-        )
+        history = ConversationHistory(max_turns=10, summarization_threshold=8, token_budget=2000)
         turn = make_turn("student", "What is photosynthesis?", 1)
         new_history = history.add_turn(turn)
 
@@ -77,9 +67,7 @@ class TestAddTurnImmutability:
     def test_chained_add_turns(self):
         from src.education.history import ConversationHistory
 
-        history = ConversationHistory(
-            max_turns=10, summarization_threshold=8, token_budget=2000
-        )
+        history = ConversationHistory(max_turns=10, summarization_threshold=8, token_budget=2000)
         history = history.add_turn(make_turn("student", "Hello", 1))
         history = history.add_turn(make_turn("tutor", "Hi there!", 2))
         history = history.add_turn(make_turn("student", "Help me", 3))
@@ -92,9 +80,7 @@ class TestGetContextWindow:
     def test_returns_all_turns_within_budget(self):
         from src.education.history import ConversationHistory
 
-        history = ConversationHistory(
-            max_turns=10, summarization_threshold=8, token_budget=2000
-        )
+        history = ConversationHistory(max_turns=10, summarization_threshold=8, token_budget=2000)
         for i in range(5):
             history = history.add_turn(make_turn("student", f"Question {i}", i + 1))
 
@@ -105,9 +91,7 @@ class TestGetContextWindow:
         from src.education.history import ConversationHistory
 
         # Very tight budget — only a few short messages fit
-        history = ConversationHistory(
-            max_turns=100, summarization_threshold=50, token_budget=20
-        )
+        history = ConversationHistory(max_turns=100, summarization_threshold=50, token_budget=20)
         for i in range(10):
             content = "a" * 50  # ~12 tokens each
             history = history.add_turn(make_turn("student", content, i + 1))
@@ -119,9 +103,7 @@ class TestGetContextWindow:
     def test_returns_most_recent_turns(self):
         from src.education.history import ConversationHistory
 
-        history = ConversationHistory(
-            max_turns=100, summarization_threshold=50, token_budget=20
-        )
+        history = ConversationHistory(max_turns=100, summarization_threshold=50, token_budget=20)
         for i in range(5):
             content = "a" * 50
             history = history.add_turn(make_turn("student", content, i + 1))
@@ -137,17 +119,13 @@ class TestToChatContext:
     def test_empty_history_returns_empty_list(self):
         from src.education.history import ConversationHistory
 
-        history = ConversationHistory(
-            max_turns=10, summarization_threshold=8, token_budget=2000
-        )
+        history = ConversationHistory(max_turns=10, summarization_threshold=8, token_budget=2000)
         assert history.to_chat_context() == []
 
     def test_student_role_maps_to_user(self):
         from src.education.history import ConversationHistory
 
-        history = ConversationHistory(
-            max_turns=10, summarization_threshold=8, token_budget=2000
-        )
+        history = ConversationHistory(max_turns=10, summarization_threshold=8, token_budget=2000)
         history = history.add_turn(make_turn("student", "Hello", 1))
         ctx = history.to_chat_context()
 
@@ -158,9 +136,7 @@ class TestToChatContext:
     def test_tutor_role_maps_to_assistant(self):
         from src.education.history import ConversationHistory
 
-        history = ConversationHistory(
-            max_turns=10, summarization_threshold=8, token_budget=2000
-        )
+        history = ConversationHistory(max_turns=10, summarization_threshold=8, token_budget=2000)
         history = history.add_turn(make_turn("tutor", "Great question!", 1))
         ctx = history.to_chat_context()
 
@@ -171,9 +147,7 @@ class TestToChatContext:
     def test_mixed_roles_are_mapped_correctly(self):
         from src.education.history import ConversationHistory
 
-        history = ConversationHistory(
-            max_turns=10, summarization_threshold=8, token_budget=2000
-        )
+        history = ConversationHistory(max_turns=10, summarization_threshold=8, token_budget=2000)
         history = history.add_turn(make_turn("student", "Question", 1))
         history = history.add_turn(make_turn("tutor", "Answer", 2))
         history = history.add_turn(make_turn("student", "Follow up", 3))
@@ -186,9 +160,7 @@ class TestToChatContext:
     def test_chat_context_has_role_and_content_keys(self):
         from src.education.history import ConversationHistory
 
-        history = ConversationHistory(
-            max_turns=10, summarization_threshold=8, token_budget=2000
-        )
+        history = ConversationHistory(max_turns=10, summarization_threshold=8, token_budget=2000)
         history = history.add_turn(make_turn("student", "Test", 1))
         ctx = history.to_chat_context()
 
@@ -201,13 +173,9 @@ class TestSummarize:
     async def test_summarize_returns_new_instance(self):
         from src.education.history import ConversationHistory
 
-        history = ConversationHistory(
-            max_turns=10, summarization_threshold=3, token_budget=2000
-        )
+        history = ConversationHistory(max_turns=10, summarization_threshold=3, token_budget=2000)
         for i in range(5):
-            history = history.add_turn(
-                make_turn("student", f"Question {i}", i + 1)
-            )
+            history = history.add_turn(make_turn("student", f"Question {i}", i + 1))
 
         async def mock_llm(messages: list[dict]) -> str:
             return "Summary of conversation so far."
@@ -219,13 +187,9 @@ class TestSummarize:
     async def test_summarize_reduces_turn_count(self):
         from src.education.history import ConversationHistory
 
-        history = ConversationHistory(
-            max_turns=10, summarization_threshold=3, token_budget=2000
-        )
+        history = ConversationHistory(max_turns=10, summarization_threshold=3, token_budget=2000)
         for i in range(6):
-            history = history.add_turn(
-                make_turn("student", f"Question number {i}", i + 1)
-            )
+            history = history.add_turn(make_turn("student", f"Question number {i}", i + 1))
 
         original_count = len(history.get_context_window())
 
@@ -240,19 +204,15 @@ class TestSummarize:
     async def test_summarize_original_unchanged(self):
         from src.education.history import ConversationHistory
 
-        history = ConversationHistory(
-            max_turns=10, summarization_threshold=3, token_budget=2000
-        )
+        history = ConversationHistory(max_turns=10, summarization_threshold=3, token_budget=2000)
         for i in range(5):
-            history = history.add_turn(
-                make_turn("student", f"Question {i}", i + 1)
-            )
+            history = history.add_turn(make_turn("student", f"Question {i}", i + 1))
         original_window = history.get_context_window()
 
         async def mock_llm(messages: list[dict]) -> str:
             return "Summary text."
 
-        new_history = await history.summarize(mock_llm)
+        await history.summarize(mock_llm)
 
         # Original history's window must be unchanged
         assert history.get_context_window() == original_window
@@ -261,9 +221,7 @@ class TestSummarize:
     async def test_summarize_empty_history_returns_same(self):
         from src.education.history import ConversationHistory
 
-        history = ConversationHistory(
-            max_turns=10, summarization_threshold=3, token_budget=2000
-        )
+        history = ConversationHistory(max_turns=10, summarization_threshold=3, token_budget=2000)
 
         async def mock_llm(messages: list[dict]) -> str:
             return "No content to summarize."

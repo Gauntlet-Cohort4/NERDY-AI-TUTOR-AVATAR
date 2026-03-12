@@ -10,6 +10,8 @@ import AvatarDisplay from "@/components/AvatarDisplay";
 import ConnectionStatus from "@/components/ConnectionStatus";
 import LatencyOverlay from "@/components/LatencyOverlay";
 import SessionControls from "@/components/SessionControls";
+import TranscriptSidebar from "@/components/TranscriptSidebar";
+import type { TranscriptEntry } from "@/components/TranscriptSidebar";
 import SessionInner from "./SessionInner";
 
 const logger = createLogger("SessionPage");
@@ -40,6 +42,8 @@ function SessionContent() {
   const [metricsHistory, setMetricsHistory] = useState<readonly TurnMetrics[]>([]);
   const [metricsAverages, setMetricsAverages] = useState<MetricsAverages | null>(null);
   const [metricsVisible, setMetricsVisible] = useState(false);
+  const [transcriptEntries, setTranscriptEntries] = useState<readonly TranscriptEntry[]>([]);
+  const [transcriptVisible, setTranscriptVisible] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
@@ -90,6 +94,24 @@ function SessionContent() {
   const handleToggleMetrics = useCallback(() => {
     setMetricsVisible((prev) => {
       logger.info("metrics_visibility_toggled", { visible: !prev });
+      return !prev;
+    });
+  }, []);
+
+  const handleTranscriptUpdate = useCallback((entry: TranscriptEntry) => {
+    setTranscriptEntries((prev) => {
+      const idx = prev.findIndex((e) => e.id === entry.id);
+      if (idx >= 0) {
+        // Upsert: replace existing entry with updated text (same stream)
+        return [...prev.slice(0, idx), entry, ...prev.slice(idx + 1)];
+      }
+      return [...prev, entry];
+    });
+  }, []);
+
+  const handleToggleTranscript = useCallback(() => {
+    setTranscriptVisible((prev) => {
+      logger.info("transcript_visibility_toggled", { visible: !prev });
       return !prev;
     });
   }, []);
@@ -156,35 +178,41 @@ function SessionContent() {
         subject={subject}
         onConnectionStateChange={handleConnectionStateChange}
         onMetricsUpdate={handleMetricsUpdate}
+        onTranscriptUpdate={handleTranscriptUpdate}
       />
-      <main className="flex min-h-screen flex-col bg-gray-950 text-white">
-        <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-          <div>
-            <h1 className="text-xl font-bold capitalize">{subject} Tutor</h1>
-            <p className="text-xs text-gray-400">Real-time AI tutoring session</p>
+      <div className="flex min-h-screen bg-gray-950 text-white">
+        <main className="flex flex-1 flex-col">
+          <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+            <div>
+              <h1 className="text-xl font-bold capitalize">{subject} Tutor</h1>
+              <p className="text-xs text-gray-400">Real-time AI tutoring session</p>
+            </div>
+            <ConnectionStatus state={connectionState} />
+          </header>
+          <div className="flex-1 flex items-center justify-center p-6">
+            <div className="relative w-full max-w-3xl">
+              <AvatarDisplay />
+              <LatencyOverlay
+                metrics={latestMetrics}
+                averages={metricsAverages}
+                visible={metricsVisible}
+              />
+            </div>
           </div>
-          <ConnectionStatus state={connectionState} />
-        </header>
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="relative w-full max-w-3xl">
-            <AvatarDisplay />
-            <LatencyOverlay
-              metrics={latestMetrics}
-              averages={metricsAverages}
-              visible={metricsVisible}
+          <footer className="flex items-center justify-center px-6 py-5 border-t border-gray-800">
+            <SessionControls
+              isConnected={isConnected}
+              onStart={handleStartSession}
+              onEnd={handleEndSession}
+              metricsVisible={metricsVisible}
+              onToggleMetrics={handleToggleMetrics}
+              transcriptVisible={transcriptVisible}
+              onToggleTranscript={handleToggleTranscript}
             />
-          </div>
-        </div>
-        <footer className="flex items-center justify-center px-6 py-5 border-t border-gray-800">
-          <SessionControls
-            isConnected={isConnected}
-            onStart={handleStartSession}
-            onEnd={handleEndSession}
-            metricsVisible={metricsVisible}
-            onToggleMetrics={handleToggleMetrics}
-          />
-        </footer>
-      </main>
+          </footer>
+        </main>
+        <TranscriptSidebar entries={transcriptEntries} visible={transcriptVisible} />
+      </div>
     </LiveKitRoom>
   );
 }

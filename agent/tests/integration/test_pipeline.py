@@ -21,9 +21,9 @@ import pytest
 
 from src.config import AppConfig
 from src.errors import (
-    ErrorSeverity,
     FALLBACK_RESPONSES,
     MAX_RETRIES,
+    ErrorSeverity,
     PipelineError,
     PipelineStage,
     handle_pipeline_error,

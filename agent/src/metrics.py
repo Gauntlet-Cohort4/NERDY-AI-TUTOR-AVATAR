@@ -15,6 +15,7 @@ accumulate individual stage timings and assemble ``TurnMetrics`` on demand.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import TYPE_CHECKING
 
@@ -112,8 +113,13 @@ class MetricsCollector:
                 total_ms=turn.total_e2e_ms,
             )
 
-            # Publish to data channel so the frontend overlay updates in real time
-            self._publish_turn_metrics(turn)
+            # Publish to data channel so the frontend overlay updates in real time.
+            # asyncio.create_task requires a running loop (always present in
+            # the LiveKit agent worker; absent in synchronous unit tests).
+            try:
+                asyncio.create_task(self._publish_turn_metrics(turn))
+            except RuntimeError:
+                pass  # No running event loop (test environment)
         else:
             # VADMetrics, EOUMetrics, RealtimeModelMetrics — log but don't
             # incorporate into turn timing.
@@ -123,7 +129,7 @@ class MetricsCollector:
                 metrics_type=type(metrics).__name__,
             )
 
-    def _publish_turn_metrics(self, turn: TurnMetrics) -> None:
+    async def _publish_turn_metrics(self, turn: TurnMetrics) -> None:
         """Publish a single turn's metrics to the LiveKit data channel.
 
         The payload matches the ``TurnMetrics`` interface expected by the
@@ -145,7 +151,7 @@ class MetricsCollector:
         })
 
         try:
-            self._room.local_participant.publish_data(
+            await self._room.local_participant.publish_data(
                 payload,
                 reliable=True,
                 topic=_METRICS_TOPIC,

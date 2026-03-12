@@ -20,11 +20,9 @@ import random
 import pytest
 
 from src.metrics import MetricsCollector
-from src.types import TurnMetrics
 from tests.conftest import (
     _make_llm_event,
     _make_stt_event,
-    _make_tts_event,
     _send_full_turn,
 )
 

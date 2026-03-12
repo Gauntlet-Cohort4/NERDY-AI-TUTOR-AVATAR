@@ -11,12 +11,13 @@ In livekit-agents 1.4.x, ``metrics_collected`` fires individual metric events
 ``TurnMetrics`` snapshot each time a TTS metric arrives (last pipeline stage).
 """
 
+import asyncio
 import json
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.metrics import MetricsCollector, _METRICS_TOPIC
+from src.metrics import _METRICS_TOPIC, MetricsCollector
 from tests.conftest import _send_full_turn
 
 
@@ -119,19 +120,21 @@ def _make_mock_room():
     """Create a mock Room with a local_participant that records publish_data calls."""
     room = MagicMock()
     room.local_participant = MagicMock()
-    room.local_participant.publish_data = MagicMock()
+    room.local_participant.publish_data = AsyncMock()
     return room
 
 
 class TestPublishMetrics:
-    """Tests for data channel publishing."""
+    """Tests for data channel publishing (async — create_task needs a running loop)."""
 
-    def test_publish_called_on_tts_event(self):
+    @pytest.mark.asyncio
+    async def test_publish_called_on_tts_event(self):
         """Completing a turn (TTS event) publishes metrics to the data channel."""
         room = _make_mock_room()
         collector = MetricsCollector(session_id="pub-test", room=room)
 
         _send_full_turn(collector, stt_duration=0.25, llm_ttft=0.22, tts_ttfb=0.09)
+        await asyncio.sleep(0)  # let create_task fire
 
         room.local_participant.publish_data.assert_called_once()
         call_args = room.local_participant.publish_data.call_args
@@ -151,24 +154,28 @@ class TestPublishMetrics:
         _send_full_turn(collector, stt_duration=0.25, llm_ttft=0.22, tts_ttfb=0.09)
         assert len(collector.turn_metrics) == 1
 
-    def test_publish_failure_does_not_crash_pipeline(self):
+    @pytest.mark.asyncio
+    async def test_publish_failure_does_not_crash_pipeline(self):
         """If publish_data raises, the turn is still recorded."""
         room = _make_mock_room()
         room.local_participant.publish_data.side_effect = RuntimeError("network down")
         collector = MetricsCollector(session_id="fail-test", room=room)
 
         _send_full_turn(collector, stt_duration=0.1, llm_ttft=0.1, tts_ttfb=0.1)
+        await asyncio.sleep(0)
 
         assert len(collector.turn_metrics) == 1
         assert collector.turn_metrics[0].turn_number == 1
 
-    def test_publish_multiple_turns(self):
+    @pytest.mark.asyncio
+    async def test_publish_multiple_turns(self):
         """Each completed turn triggers a separate publish call."""
         room = _make_mock_room()
         collector = MetricsCollector(session_id="multi-test", room=room)
 
         for _ in range(3):
             _send_full_turn(collector, stt_duration=0.1, llm_ttft=0.1, tts_ttfb=0.1)
+        await asyncio.sleep(0)
 
         assert room.local_participant.publish_data.call_count == 3
 
@@ -178,7 +185,8 @@ class TestPublishMetrics:
             payload = json.loads(call[0][0])
             assert payload["turn"] == i
 
-    def test_publish_payload_values_rounded(self):
+    @pytest.mark.asyncio
+    async def test_publish_payload_values_rounded(self):
         """Published payload values are rounded to 1 decimal place."""
         room = _make_mock_room()
         collector = MetricsCollector(session_id="round-test", room=room)
@@ -186,6 +194,7 @@ class TestPublishMetrics:
         _send_full_turn(
             collector, stt_duration=0.12345, llm_ttft=0.22222, tts_ttfb=0.09876
         )
+        await asyncio.sleep(0)
 
         payload = json.loads(
             room.local_participant.publish_data.call_args[0][0]

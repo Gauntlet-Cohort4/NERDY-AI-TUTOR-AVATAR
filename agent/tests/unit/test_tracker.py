@@ -13,7 +13,6 @@ Requirement mapping:
 - test_summary_property                      → summary property returns current summary
 """
 
-import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 

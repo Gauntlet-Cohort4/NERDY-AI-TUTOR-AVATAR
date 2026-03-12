@@ -1,3 +1,11 @@
+"use client";
+
+import { useTrackToggle } from "@livekit/components-react";
+import { Track } from "livekit-client";
+import { createLogger } from "@/lib/logger";
+
+const logger = createLogger("SessionControls");
+
 interface SessionControlsProps {
   isConnected: boolean;
   onStart: () => void;
@@ -6,6 +14,43 @@ interface SessionControlsProps {
   onToggleMetrics: () => void;
   transcriptVisible: boolean;
   onToggleTranscript: () => void;
+}
+
+function MicToggle() {
+  const { enabled, toggle } = useTrackToggle({ source: Track.Source.Microphone });
+
+  const handleToggle = () => {
+    toggle();
+    logger.info("mic_toggled", { muted: enabled });
+  };
+
+  return (
+    <button
+      onClick={handleToggle}
+      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+        enabled
+          ? "bg-green-600 text-white hover:bg-green-700"
+          : "bg-yellow-600 text-white hover:bg-yellow-700"
+      }`}
+      title={enabled ? "Mute microphone" : "Unmute microphone"}
+    >
+      <span className="flex items-center gap-1.5">
+        {enabled ? (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+            <path d="M7 4a3 3 0 0 1 6 0v6a3 3 0 1 1-6 0V4Z" />
+            <path d="M5.5 9.643a.75.75 0 0 0-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-1.5v-1.546A6.001 6.001 0 0 0 16 10v-.357a.75.75 0 0 0-1.5 0V10a4.5 4.5 0 0 1-9 0v-.357Z" />
+          </svg>
+        ) : (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+            <path d="M17.78 2.22a.75.75 0 0 0-1.06 0l-3.22 3.22V4a3 3 0 0 0-6 0v6c0 .09 0 .18.02.27L4.3 13.48A5.97 5.97 0 0 1 4 12v-.357a.75.75 0 0 0-1.5 0V12c0 1.54.58 2.94 1.53 4.01L2.22 17.78a.75.75 0 1 0 1.06 1.06l14.5-14.5a.75.75 0 0 0 0-1.06Z" />
+            <path d="M15.5 11.643a.75.75 0 0 1 .75.75 5.97 5.97 0 0 1-.83 3.05l-1.09-1.09c.33-.57.52-1.22.57-1.9v-.06a.75.75 0 0 1 .75-.75ZM10.75 15.954V17.5h1.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5h1.5v-1.546a6.06 6.06 0 0 1-1.13-.195l1.2-1.2c.45.1.92.155 1.4.161a4.51 4.51 0 0 0 3.78-2.04l1.09 1.09A5.99 5.99 0 0 1 10.75 15.954Z" />
+            <path d="M13 10V6.09L8.39 10.7c.44.53 1.1.87 1.84.93.08.01.16.01.25.01A3 3 0 0 0 13 10Z" />
+          </svg>
+        )}
+        {enabled ? "Mic On" : "Mic Off"}
+      </span>
+    </button>
+  );
 }
 
 export default function SessionControls({
@@ -27,12 +72,15 @@ export default function SessionControls({
           Start Session
         </button>
       ) : (
-        <button
-          onClick={onEnd}
-          className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-        >
-          End Session
-        </button>
+        <>
+          <MicToggle />
+          <button
+            onClick={onEnd}
+            className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+          >
+            End Session
+          </button>
+        </>
       )}
       <button
         onClick={onToggleMetrics}

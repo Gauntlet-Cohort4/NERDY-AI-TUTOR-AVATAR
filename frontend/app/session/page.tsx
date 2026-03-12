@@ -190,15 +190,15 @@ function SessionContent() {
             <ConnectionStatus state={connectionState} />
           </header>
           <div className="flex-1 flex items-center justify-center p-6">
-            <div className="relative w-full max-w-3xl">
+            <div className="w-full max-w-3xl">
               <AvatarDisplay />
-              <LatencyOverlay
-                metrics={latestMetrics}
-                averages={metricsAverages}
-                visible={metricsVisible}
-              />
             </div>
           </div>
+          <LatencyOverlay
+            metrics={latestMetrics}
+            averages={metricsAverages}
+            visible={metricsVisible}
+          />
           <footer className="flex items-center justify-center px-6 py-5 border-t border-gray-800">
             <SessionControls
               isConnected={isConnected}

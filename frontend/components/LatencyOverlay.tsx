@@ -44,7 +44,7 @@ export default function LatencyOverlay({
   const hasData = metrics !== undefined || averages !== undefined;
 
   return (
-    <div className="absolute top-2 right-2 bg-black/80 text-white text-xs p-3 rounded-lg font-mono min-w-[260px] shadow-lg border border-gray-700/50">
+    <div className="fixed bottom-20 left-4 z-40 bg-black/80 text-white text-xs p-3 rounded-lg font-mono min-w-[260px] shadow-lg border border-gray-700/50">
       {/* Header with live indicator */}
       <div className="flex items-center justify-between mb-2 pb-1 border-b border-gray-600/50">
         <span className="text-gray-300 font-semibold text-[11px] uppercase tracking-wide">

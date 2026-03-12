@@ -6,9 +6,36 @@ Each prompt:
 - Enforces the Socratic method (ask questions, guide with hints, no direct answers)
 - Limits responses to 2 sentences using simple language
 - Celebrates student reasoning
+- Includes a subject-boundary guardrail to redirect off-topic requests
 """
 
 from src.types import Subject
+
+_SUBJECT_NAMES: dict[Subject, str] = {
+    Subject.BIOLOGY: "Biology",
+    Subject.MATH: "Math",
+    Subject.PHYSICS: "Physics",
+}
+
+_OTHER_SUBJECTS: dict[Subject, str] = {
+    Subject.BIOLOGY: "math or physics",
+    Subject.MATH: "biology or physics",
+    Subject.PHYSICS: "biology or math",
+}
+
+
+def _boundary_clause(subject: Subject) -> str:
+    """Return a subject-boundary guardrail paragraph for the given subject."""
+    name = _SUBJECT_NAMES[subject]
+    others = _OTHER_SUBJECTS[subject]
+    return (
+        f"You are only able to help with {name} in this session. If the student asks "
+        f"about a different subject (for example, {others}), politely let them know: "
+        f'"I\'m your {name} tutor for this session! If you\'d like help with another '
+        f'subject, head back to the dashboard and pick a new one." Then gently steer '
+        f"the conversation back to {name}."
+    )
+
 
 _BIOLOGY_PROMPT = """\
 You are Lauren, a friendly and enthusiastic tutor avatar helping a 7th grade student \
@@ -54,6 +81,10 @@ _PROMPTS: dict[Subject, str] = {
 def get_system_prompt(subject: Subject) -> str:
     """Return the Socratic system prompt for the given subject.
 
+    Includes a subject-boundary guardrail that instructs the agent to
+    redirect students who ask about a different subject back to the
+    dashboard.
+
     Args:
         subject: The Subject enum value to look up.
 
@@ -63,4 +94,6 @@ def get_system_prompt(subject: Subject) -> str:
     Raises:
         KeyError: If an unknown Subject is provided.
     """
-    return _PROMPTS[subject]
+    base_prompt = _PROMPTS[subject]
+    boundary = _boundary_clause(subject)
+    return f"{base_prompt}\n\n{boundary}"

@@ -49,3 +49,7 @@ venv/
 coverage/
 .nyc_output/
 htmlcov/
+
+# Design reference files (not part of the app)
+nerdy-landing-design-prompt.md
+nerdy-ai-tutor-landing.jsx

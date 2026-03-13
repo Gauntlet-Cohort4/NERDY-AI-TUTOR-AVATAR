@@ -24,6 +24,7 @@ class SubjectTutorAgent(Agent):
     """
 
     _subject: Subject  # Must be set by subclass
+    _grade: int | None = None  # Optional grade override from frontend
 
     def _update_stt_keyterms(self) -> None:
         """Update Deepgram STT keyterms for this subject.

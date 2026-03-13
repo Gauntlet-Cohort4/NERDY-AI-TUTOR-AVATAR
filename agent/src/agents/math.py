@@ -15,12 +15,13 @@ class MathTutorAgent(SubjectTutorAgent):
 
     _subject = Subject.MATH
 
-    def __init__(self) -> None:
+    def __init__(self, grade: int | None = None) -> None:
         subject_config = SUBJECT_CONFIGS[Subject.MATH]
-        super().__init__(instructions=get_system_prompt(Subject.MATH))
+        super().__init__(instructions=get_system_prompt(Subject.MATH, grade=grade))
+        self._grade = grade
         logger.debug(
             "math_agent_created",
-            grade_level=subject_config.grade_level,
+            grade_level=grade or subject_config.grade_level,
             keyterm_count=len(subject_config.keyterms),
         )
 

@@ -11,6 +11,7 @@ This module starts the LiveKit AgentServer and wires together:
 from __future__ import annotations
 
 import json
+import re
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -20,10 +21,18 @@ import structlog
 from livekit.agents import Agent, AgentSession
 from livekit.plugins import cartesia, deepgram, groq, silero, simli  # noqa: F401
 
+from src.agents.algebra_ii import AlgebraIITutorAgent
+from src.agents.ap_biology import APBiologyTutorAgent
 from src.agents.biology import BiologyTutorAgent
+from src.agents.calculus import CalculusTutorAgent
+from src.agents.cell_biology import CellBiologyTutorAgent
+from src.agents.chemistry import ChemistryTutorAgent
+from src.agents.earth_science import EarthScienceTutorAgent
+from src.agents.intro_algebra import IntroAlgebraTutorAgent
 from src.agents.math import MathTutorAgent
 from src.agents.physics import PhysicsTutorAgent
 from src.agents.router import SubjectRouterAgent
+from src.agents.world_history import WorldHistoryTutorAgent
 from src.avatar.renderer import SimliAvatarAdapter
 from src.config import AppConfig
 from src.education.history import ConversationHistory
@@ -120,23 +129,48 @@ def health_check() -> dict:
 _SUBJECT_AGENTS = {
     "biology": BiologyTutorAgent,
     "math": MathTutorAgent,
+    "earth_science": EarthScienceTutorAgent,
+    "intro_algebra": IntroAlgebraTutorAgent,
+    "algebra_ii": AlgebraIITutorAgent,
+    "chemistry": ChemistryTutorAgent,
+    "cell_biology": CellBiologyTutorAgent,
+    "world_history": WorldHistoryTutorAgent,
+    "calculus": CalculusTutorAgent,
     "physics": PhysicsTutorAgent,
+    "ap_biology": APBiologyTutorAgent,
 }
 
 
+def _parse_grade(parts: list[str]) -> int | None:
+    """Extract grade from room name parts like ['tutor', 'biology', 'g7', '12345']."""
+    for part in parts:
+        match = re.fullmatch(r"g(\d{1,2})", part)
+        if match:
+            grade = int(match.group(1))
+            if 6 <= grade <= 12:
+                return grade
+    return None
+
+
 def _resolve_agent(room_name: str) -> Agent:
-    """Parse subject from room name (tutor-{subject}-{timestamp}) and return
-    the matching subject tutor. Falls back to the router if unrecognized."""
+    """Parse subject and grade from room name and return the matching agent.
+
+    Room name format: tutor-{subject}-g{grade}-{timestamp}
+    Falls back to the router if subject is unrecognized.
+    """
+    logger.info("resolve_agent_called", room_name=room_name)
     parts = room_name.split("-")
+    grade = _parse_grade(parts)
+
     if len(parts) >= 2:
         subject_key = parts[1].lower()
         agent_cls = _SUBJECT_AGENTS.get(subject_key)
         if agent_cls is not None:
-            logger.info("direct_subject_routing", subject=subject_key)
-            return agent_cls()
+            logger.info("direct_subject_routing", subject=subject_key, grade=grade)
+            return agent_cls(grade=grade)
 
-    logger.info("falling_back_to_router", room_name=room_name)
-    return SubjectRouterAgent()
+    logger.warning("falling_back_to_router", room_name=room_name, parts=parts, grade=grade)
+    return SubjectRouterAgent(grade=grade)
 
 
 # ── LiveKit entrypoint ──────────────────────────────────────────────────────
@@ -190,7 +224,10 @@ async def entrypoint(ctx) -> None:
         stt=stt,
         llm=llm,
         tts=tts,
-        vad=silero.VAD.load(),
+        vad=silero.VAD.load(
+            activation_threshold=0.65,
+            min_speech_duration=0.1,
+        ),
     )
 
     session.on("metrics_collected", metrics.on_metrics)

@@ -1,11 +1,25 @@
 import { NextResponse } from "next/server";
 import { AccessToken } from "livekit-server-sdk";
 
-const VALID_SUBJECTS = new Set(["biology", "math", "physics"]);
+const VALID_SUBJECTS = new Set([
+  "biology",
+  "math",
+  "earth_science",
+  "intro_algebra",
+  "algebra_ii",
+  "chemistry",
+  "cell_biology",
+  "world_history",
+  "calculus",
+  "physics",
+  "ap_biology",
+]);
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const subject = searchParams.get("subject") ?? "biology";
+  const gradeRaw = searchParams.get("grade");
+  const grade = gradeRaw && /^([6-9]|1[0-2])$/.test(gradeRaw) ? gradeRaw : null;
 
   if (!VALID_SUBJECTS.has(subject)) {
     return NextResponse.json(
@@ -29,7 +43,9 @@ export async function GET(request: Request) {
     );
   }
 
-  const roomName = `tutor-${subject}-${Date.now()}`;
+  const roomName = grade
+    ? `tutor-${subject}-g${grade}-${Date.now()}`
+    : `tutor-${subject}-${Date.now()}`;
   const participantIdentity = `student-${Date.now()}`;
 
   const token = new AccessToken(apiKey, apiSecret, {

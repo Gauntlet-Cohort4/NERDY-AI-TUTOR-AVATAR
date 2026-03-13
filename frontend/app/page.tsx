@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createLogger } from "@/lib/logger";
 import type { Subject } from "@/lib/types";
@@ -21,7 +21,7 @@ interface SubjectConfig {
   readonly name: string;
   readonly subject: Subject;
   readonly topic: string;
-  readonly icon: "leaf" | "calc" | "atom";
+  readonly icon: "leaf" | "calc" | "atom" | "globe" | "flask" | "cell" | "book" | "dna";
   readonly color: string;
   readonly bg: string;
 }
@@ -41,11 +41,25 @@ const HIGH_SCHOOL: readonly Grade[] = [
 
 const ALL_GRADES: readonly Grade[] = [...MIDDLE_SCHOOL, ...HIGH_SCHOOL];
 
-// Same three subjects for every grade (demo mode)
-const SUBJECTS: readonly SubjectConfig[] = [
-  { name: "Biology", subject: "biology", topic: "Life Sciences", icon: "leaf", color: "#28A745", bg: "rgba(40,167,69,0.08)" },
-  { name: "Math", subject: "math", topic: "Mathematics", icon: "calc", color: "#6F42C1", bg: "rgba(111,66,193,0.08)" },
-  { name: "Physics", subject: "physics", topic: "Physical Sciences", icon: "atom", color: "#FD7E14", bg: "rgba(253,126,20,0.08)" },
+// Grade-band subject maps
+const MIDDLE_SCHOOL_SUBJECTS: readonly SubjectConfig[] = [
+  { name: "Fractions", subject: "math", topic: "Numerators, Denominators & More", icon: "calc", color: "#6F42C1", bg: "rgba(111,66,193,0.08)" },
+  { name: "Basic Biology", subject: "biology", topic: "Photosynthesis", icon: "leaf", color: "#28A745", bg: "rgba(40,167,69,0.08)" },
+  { name: "Earth Science", subject: "earth_science", topic: "Rocks, Tectonics & Erosion", icon: "globe", color: "#17A2B8", bg: "rgba(23,162,184,0.08)" },
+  { name: "Intro Algebra", subject: "intro_algebra", topic: "Variables & Equations", icon: "calc", color: "#E83E8C", bg: "rgba(232,62,140,0.08)" },
+];
+
+const HIGH_SCHOOL_LOWER_SUBJECTS: readonly SubjectConfig[] = [
+  { name: "Algebra II", subject: "algebra_ii", topic: "Quadratics & Polynomials", icon: "calc", color: "#6F42C1", bg: "rgba(111,66,193,0.08)" },
+  { name: "Chemistry", subject: "chemistry", topic: "Elements & Reactions", icon: "flask", color: "#FD7E14", bg: "rgba(253,126,20,0.08)" },
+  { name: "Cell Biology", subject: "cell_biology", topic: "Cells & Organelles", icon: "cell", color: "#28A745", bg: "rgba(40,167,69,0.08)" },
+  { name: "World History", subject: "world_history", topic: "Civilizations & Empires", icon: "book", color: "#DC3545", bg: "rgba(220,53,69,0.08)" },
+];
+
+const HIGH_SCHOOL_UPPER_SUBJECTS: readonly SubjectConfig[] = [
+  { name: "Calculus", subject: "calculus", topic: "Derivatives & Integrals", icon: "calc", color: "#6F42C1", bg: "rgba(111,66,193,0.08)" },
+  { name: "Physics", subject: "physics", topic: "Classical Mechanics", icon: "atom", color: "#FD7E14", bg: "rgba(253,126,20,0.08)" },
+  { name: "AP Biology", subject: "ap_biology", topic: "Gene Expression & Evolution", icon: "dna", color: "#28A745", bg: "rgba(40,167,69,0.08)" },
 ];
 
 const FEATURES = [
@@ -89,15 +103,92 @@ function AtomIcon({ color }: { color: string }) {
   );
 }
 
+function GlobeIcon({ color }: { color: string }) {
+  return (
+    <svg aria-hidden="true" focusable="false" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+    </svg>
+  );
+}
+
+function FlaskIcon({ color }: { color: string }) {
+  return (
+    <svg aria-hidden="true" focusable="false" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 3h6v5l4 9H5l4-9V3z" />
+      <line x1="9" y1="3" x2="15" y2="3" />
+      <path d="M7 17h10" />
+    </svg>
+  );
+}
+
+function CellIcon({ color }: { color: string }) {
+  return (
+    <svg aria-hidden="true" focusable="false" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <ellipse cx="12" cy="12" rx="10" ry="8" />
+      <circle cx="12" cy="12" r="3" />
+      <circle cx="12" cy="12" r="1" fill={color} />
+    </svg>
+  );
+}
+
+function BookIcon({ color }: { color: string }) {
+  return (
+    <svg aria-hidden="true" focusable="false" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+    </svg>
+  );
+}
+
+function DnaIcon({ color }: { color: string }) {
+  return (
+    <svg aria-hidden="true" focusable="false" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 15c6.667-6 13.333 0 20-6" />
+      <path d="M9 22c1.798-1.998 2.518-3.995 2.807-5.993" />
+      <path d="M15 2c-1.798 1.998-2.518 3.995-2.807 5.993" />
+      <path d="M2 9c6.667 6 13.333 0 20 6" />
+    </svg>
+  );
+}
+
 function SubjectIcon({ type, color }: { type: SubjectConfig["icon"]; color: string }) {
   switch (type) {
     case "leaf": return <LeafIcon color={color} />;
     case "calc": return <CalcIcon color={color} />;
     case "atom": return <AtomIcon color={color} />;
+    case "globe": return <GlobeIcon color={color} />;
+    case "flask": return <FlaskIcon color={color} />;
+    case "cell": return <CellIcon color={color} />;
+    case "book": return <BookIcon color={color} />;
+    case "dna": return <DnaIcon color={color} />;
     default: {
       const _exhaustive: never = type;
       return _exhaustive;
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function getGradeBand(gradeId: string): "middle" | "hs_lower" | "hs_upper" | null {
+  const num = parseInt(gradeId.replace("grade", ""), 10);
+  if (num >= 6 && num <= 8) return "middle";
+  if (num >= 9 && num <= 10) return "hs_lower";
+  if (num >= 11 && num <= 12) return "hs_upper";
+  return null;
+}
+
+function getSubjectsForGrade(gradeId: string): readonly SubjectConfig[] {
+  const band = getGradeBand(gradeId);
+  switch (band) {
+    case "middle": return MIDDLE_SCHOOL_SUBJECTS;
+    case "hs_lower": return HIGH_SCHOOL_LOWER_SUBJECTS;
+    case "hs_upper": return HIGH_SCHOOL_UPPER_SUBJECTS;
+    default: return [];
   }
 }
 
@@ -365,6 +456,11 @@ export default function Home() {
   const [hoveredSubject, setHoveredSubject] = useState<Subject | null>(null);
   const [subjectsVisible, setSubjectsVisible] = useState(false);
 
+  const subjects = useMemo(
+    () => (selectedGrade ? getSubjectsForGrade(selectedGrade) : []),
+    [selectedGrade],
+  );
+
   // Reset subject animation when grade changes
   useEffect(() => {
     if (selectedGrade) {
@@ -395,7 +491,7 @@ export default function Home() {
     if (!selectedSubject) return;
     const grade = ALL_GRADES.find((g) => g.id === selectedGrade);
     logger.info("session_started", { subject: selectedSubject, grade: grade?.label });
-    router.push(`/session?subject=${encodeURIComponent(selectedSubject)}`);
+    router.push(`/session?subject=${encodeURIComponent(selectedSubject)}&grade=${grade?.number ?? ""}`);
   }, [selectedSubject, selectedGrade, router]);
 
   const gradeLabel = selectedGrade
@@ -461,7 +557,7 @@ export default function Home() {
           </p>
 
           <div className="flex justify-center gap-4 flex-wrap" role="radiogroup" aria-label="Subject">
-            {SUBJECTS.map((subj, i) => {
+            {subjects.map((subj, i) => {
               const isChosen = selectedSubject === subj.subject;
               const isHovered = hoveredSubject === subj.subject;
               const showHighlight = isChosen || isHovered;
@@ -530,7 +626,7 @@ export default function Home() {
                 Start Tutoring Session
               </button>
               <p className="mt-3" style={{ color: "#506480", fontSize: 13 }}>
-                {SUBJECTS.find((s) => s.subject === selectedSubject)?.name} — {gradeLabel}
+                {subjects.find((s) => s.subject === selectedSubject)?.name} — {gradeLabel}
               </p>
             </div>
           )}

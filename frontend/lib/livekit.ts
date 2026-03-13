@@ -27,11 +27,15 @@ export function mapConnectionState(lkState: LKConnectionState): ConnectionState 
  * Throws if the response is not OK or if required fields are missing.
  */
 export async function getToken(
-  subject: string
+  subject: string,
+  grade?: number,
 ): Promise<{ token: string; url: string }> {
-  logger.info("fetching_token", { subject });
+  logger.info("fetching_token", { subject, grade });
 
-  const response = await fetch(`/api/token?subject=${encodeURIComponent(subject)}`);
+  const params = new URLSearchParams({ subject });
+  if (grade !== undefined) params.set("grade", String(grade));
+
+  const response = await fetch(`/api/token?${params.toString()}`);
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "unknown error");

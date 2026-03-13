@@ -8,9 +8,20 @@ from typing import Optional, Protocol, runtime_checkable
 
 
 class Subject(Enum):
+    # Middle School (6th-8th)
     BIOLOGY = "biology"
     MATH = "math"
+    EARTH_SCIENCE = "earth_science"
+    INTRO_ALGEBRA = "intro_algebra"
+    # High School Lower (9th-10th)
+    ALGEBRA_II = "algebra_ii"
+    CHEMISTRY = "chemistry"
+    CELL_BIOLOGY = "cell_biology"
+    WORLD_HISTORY = "world_history"
+    # High School Upper (11th-12th)
+    CALCULUS = "calculus"
     PHYSICS = "physics"
+    AP_BIOLOGY = "ap_biology"
 
 
 @dataclass(frozen=True)

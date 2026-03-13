@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useConnectionState, useDataChannel, useTranscriptions } from "@livekit/components-react";
 import { ConnectionState as LKConnectionState } from "livekit-client";
 import { mapConnectionState, parseMetricsMessage } from "@/lib/livekit";
@@ -47,25 +47,85 @@ export default function SessionInner({
   });
 
   // Capture live transcriptions (both user STT and agent responses).
-  // Each stream has a stable ID — we upsert the same entry as text grows,
-  // so the sidebar shows one card per utterance that updates in real time.
+  // Agent speech: each response gets its own streamInfo.id — one bubble per reply.
+  // User STT: Deepgram sends many small segments, each with a unique stream ID.
+  // We consolidate user segments into a single rolling bubble using a stable ref ID
+  // that only advances when an agent response arrives (meaning the user finished).
   const transcriptions = useTranscriptions();
+  const userUtteranceId = useRef<string>(`user-${Date.now()}`);
+  const lastRoleRef = useRef<"user" | "agent">("user");
+  // Cache: streamInfo.id → assigned bubble ID (stable across re-renders)
+  const assignedIds = useRef<Map<string, string>>(new Map());
+  // Cache: streamInfo.id → last emitted text (skip unchanged segments)
+  const lastSeenText = useRef<Map<string, string>>(new Map());
+  // Accumulator: bubbleId → Map<segmentKey, latest text> for user bubbles
+  const bubbleSegments = useRef<Map<string, Map<string, string>>>(new Map());
 
   useEffect(() => {
+    let dirtyBubbles: Set<string> | null = null;
+
     for (const t of transcriptions) {
       if (!t.text || t.text.trim().length < 2) continue;
 
-      const streamId = t.streamInfo?.id ?? `${t.participantInfo.identity}-${Date.now()}`;
+      const segmentKey = t.streamInfo.id;
+      const trimmedText = t.text.trim();
+
+      // Skip if text hasn't changed since last emit for this segment
+      if (lastSeenText.current.get(segmentKey) === trimmedText) continue;
+      lastSeenText.current.set(segmentKey, trimmedText);
+
       const isAgent = t.participantInfo.identity.startsWith("agent");
 
-      const entry: TranscriptEntry = {
-        id: streamId,
-        role: isAgent ? "agent" : "user",
-        text: t.text.trim(),
-        timestamp: Date.now(),
-      };
+      // Look up or assign a stable bubble ID for this segment
+      let bubbleId = assignedIds.current.get(segmentKey);
+      if (!bubbleId) {
+        if (isAgent) {
+          bubbleId = segmentKey;
+          if (lastRoleRef.current === "user") {
+            lastRoleRef.current = "agent";
+          }
+        } else {
+          if (lastRoleRef.current === "agent") {
+            userUtteranceId.current = `user-${Date.now()}`;
+            lastRoleRef.current = "user";
+          }
+          bubbleId = userUtteranceId.current;
+        }
+        assignedIds.current.set(segmentKey, bubbleId);
+      }
 
-      onTranscriptUpdate(entry);
+      if (isAgent) {
+        // Agent bubbles: one segment per bubble, emit directly
+        onTranscriptUpdate({
+          id: bubbleId,
+          role: "agent",
+          text: trimmedText,
+          timestamp: Date.now(),
+        });
+      } else {
+        // User bubbles: accumulate segments, emit combined text
+        if (!bubbleSegments.current.has(bubbleId)) {
+          bubbleSegments.current.set(bubbleId, new Map());
+        }
+        bubbleSegments.current.get(bubbleId)!.set(segmentKey, trimmedText);
+        if (!dirtyBubbles) dirtyBubbles = new Set();
+        dirtyBubbles.add(bubbleId);
+      }
+    }
+
+    // Emit accumulated user bubbles that changed this pass
+    if (dirtyBubbles) {
+      for (const bubbleId of dirtyBubbles) {
+        const segments = bubbleSegments.current.get(bubbleId);
+        if (!segments) continue;
+        const combined = Array.from(segments.values()).join(" ");
+        onTranscriptUpdate({
+          id: bubbleId,
+          role: "user",
+          text: combined,
+          timestamp: Date.now(),
+        });
+      }
     }
   }, [transcriptions, onTranscriptUpdate]);
 

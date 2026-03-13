@@ -39,7 +39,7 @@ class TestGetKeyterms:
         keyterms = get_keyterms(Subject.PHYSICS)
         expected = list(SUBJECT_CONFIGS[Subject.PHYSICS].keyterms)
         assert keyterms == expected
-        assert "Newton" in keyterms
+        assert "Newton's laws" in keyterms
 
     def test_get_keyterms_returns_list(self):
         from src.education.subjects import get_keyterms

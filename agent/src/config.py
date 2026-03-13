@@ -69,6 +69,7 @@ class AppConfig:
             "GROQ_API_KEY",
             "CARTESIA_API_KEY",
             "SIMLI_API_KEY",
+            "SIMLI_FACE_ID",
         ]
         missing = [k for k in required if not os.getenv(k)]
         if missing:
@@ -88,7 +89,7 @@ class AppConfig:
                 "CARTESIA_VOICE_ID", "f786b574-daa5-4673-aa0c-cbe3e8534c02"
             ),
             simli_api_key=os.environ["SIMLI_API_KEY"],
-            simli_face_id=os.getenv("SIMLI_FACE_ID", ""),
+            simli_face_id=os.environ["SIMLI_FACE_ID"],
             log_level=os.getenv("LOG_LEVEL", "INFO"),
         )
         logger.info(

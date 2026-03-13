@@ -121,7 +121,7 @@ class TestPromptStructure:
         from src.education.prompts import get_system_prompt
 
         prompt = get_system_prompt(Subject.PHYSICS)
-        assert "9" in prompt or "ninth" in prompt.lower()
+        assert "11" in prompt or "eleventh" in prompt.lower()
 
     def test_tutor_persona_present(self):
         from src.education.prompts import get_system_prompt

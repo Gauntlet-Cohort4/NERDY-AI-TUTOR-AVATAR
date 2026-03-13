@@ -16,7 +16,21 @@ import SessionInner from "./SessionInner";
 
 const logger = createLogger("SessionPage");
 
-const VALID_SUBJECTS = new Set<Subject>(["biology", "math", "physics"]);
+const SUBJECT_LABELS: Record<Subject, string> = {
+  biology: "Biology",
+  math: "Math",
+  earth_science: "Earth Science",
+  intro_algebra: "Intro Algebra",
+  algebra_ii: "Algebra II",
+  chemistry: "Chemistry",
+  cell_biology: "Cell Biology",
+  world_history: "World History",
+  calculus: "Calculus",
+  physics: "Physics",
+  ap_biology: "AP Biology",
+};
+
+const VALID_SUBJECTS = new Set<Subject>(Object.keys(SUBJECT_LABELS) as Subject[]);
 
 function isValidSubject(s: string | null): s is Subject {
   return VALID_SUBJECTS.has(s as Subject);
@@ -33,6 +47,9 @@ function SessionContent() {
 
   const rawSubject = searchParams.get("subject");
   const subject: Subject = isValidSubject(rawSubject) ? rawSubject : "biology";
+
+  const rawGrade = searchParams.get("grade");
+  const grade = rawGrade && /^([6-9]|1[0-2])$/.test(rawGrade) ? parseInt(rawGrade, 10) : undefined;
 
   const [tokenState, setTokenState] = useState<TokenState | null>(null);
   const [tokenError, setTokenError] = useState<string | null>(null);
@@ -53,10 +70,10 @@ function SessionContent() {
       setIsLoadingToken(true);
       setTokenError(null);
       try {
-        const result = await getToken(subject);
+        const result = await getToken(subject, grade);
         if (!cancelled) {
           setTokenState(result);
-          logger.info("token_ready", { subject });
+          logger.info("token_ready", { subject, grade });
         }
       } catch (err) {
         if (!cancelled) {
@@ -73,7 +90,7 @@ function SessionContent() {
 
     void fetchToken();
     return () => { cancelled = true; };
-  }, [subject]);
+  }, [subject, grade]);
 
   const handleConnectionStateChange = useCallback((state: ConnectionState) => {
     setConnectionState(state);
@@ -125,7 +142,7 @@ function SessionContent() {
     if (!tokenState && !isLoadingToken) {
       setIsLoadingToken(true);
       setTokenError(null);
-      getToken(subject)
+      getToken(subject, grade)
         .then((result) => {
           setTokenState(result);
           setIsLoadingToken(false);
@@ -184,7 +201,7 @@ function SessionContent() {
         <main className="flex flex-1 flex-col">
           <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
             <div>
-              <h1 className="text-xl font-bold capitalize">{subject} Tutor</h1>
+              <h1 className="text-xl font-bold">{SUBJECT_LABELS[subject]} Tutor</h1>
               <p className="text-xs text-gray-400">Real-time AI tutoring session</p>
             </div>
             <ConnectionStatus state={connectionState} />

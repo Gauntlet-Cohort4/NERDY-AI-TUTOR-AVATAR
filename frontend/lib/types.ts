@@ -1,4 +1,15 @@
-export type Subject = "biology" | "math" | "physics";
+export type Subject =
+  | "biology"
+  | "math"
+  | "earth_science"
+  | "intro_algebra"
+  | "algebra_ii"
+  | "chemistry"
+  | "cell_biology"
+  | "world_history"
+  | "calculus"
+  | "physics"
+  | "ap_biology";
 
 export interface TurnMetrics {
   turn: number;

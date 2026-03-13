@@ -1,7 +1,7 @@
 """Tests for SUBJECT_CONFIGS in education/subjects.py.
 
 Requirement mapping:
-- test_all_subjects_present        → SUBJECT_CONFIGS has all 3 subjects
+- test_all_subjects_present        → SUBJECT_CONFIGS has all 11 subjects
 - test_each_config_has_keyterms    → each SubjectConfig has non-empty keyterms tuple
 - test_each_config_has_grade_level → each SubjectConfig has non-empty grade_level
 - test_biology_keyterms_content    → Biology keyterms contain photosynthesis-related terms
@@ -20,14 +20,13 @@ class TestSubjectConfigsPresence:
     def test_all_subjects_present(self):
         from src.education.subjects import SUBJECT_CONFIGS
 
-        assert Subject.BIOLOGY in SUBJECT_CONFIGS
-        assert Subject.MATH in SUBJECT_CONFIGS
-        assert Subject.PHYSICS in SUBJECT_CONFIGS
+        for subject in Subject:
+            assert subject in SUBJECT_CONFIGS, f"{subject} missing from SUBJECT_CONFIGS"
 
-    def test_exactly_three_subjects(self):
+    def test_all_eleven_subjects_present(self):
         from src.education.subjects import SUBJECT_CONFIGS
 
-        assert len(SUBJECT_CONFIGS) == 3
+        assert len(SUBJECT_CONFIGS) == 11
 
     def test_all_values_are_subject_config_instances(self):
         from src.education.subjects import SUBJECT_CONFIGS
@@ -94,11 +93,11 @@ class TestSubjectConfigGradeLevel:
         config = SUBJECT_CONFIGS[Subject.MATH]
         assert "6" in config.grade_level
 
-    def test_physics_is_9th_grade(self):
+    def test_physics_is_11th_grade(self):
         from src.education.subjects import SUBJECT_CONFIGS
 
         config = SUBJECT_CONFIGS[Subject.PHYSICS]
-        assert "9" in config.grade_level
+        assert "11" in config.grade_level
 
 
 class TestSubjectConfigImmutability:

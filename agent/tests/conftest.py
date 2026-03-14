@@ -22,7 +22,7 @@ def mock_env_vars(monkeypatch):
         "GROQ_MODEL": "llama-3.3-70b-versatile",
         "CARTESIA_MODEL": "sonic-3",
         "CARTESIA_VOICE_ID": "f786b574-daa5-4673-aa0c-cbe3e8534c02",
-        "SIMLI_FACE_ID": "",
+        "SIMLI_FACE_ID": "test_simli_face_id",
         "LOG_LEVEL": "INFO",
     }
     for key, value in env_vars.items():

@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useConnectionState, useDataChannel, useTranscriptions } from "@livekit/components-react";
 import { ConnectionState as LKConnectionState } from "livekit-client";
-import { mapConnectionState, parseMetricsMessage } from "@/lib/livekit";
+import { mapConnectionState, parseMetricsMessage, parseWhiteboardPayload } from "@/lib/livekit";
 import { createLogger } from "@/lib/logger";
 import type { TranscriptEntry } from "@/components/TranscriptSidebar";
-import type { ConnectionState, TurnMetrics } from "@/lib/types";
+import type { ConnectionState, TurnMetrics, WhiteboardPayload } from "@/lib/types";
 
 const logger = createLogger("SessionInner");
 
@@ -15,6 +15,7 @@ interface SessionInnerProps {
   onConnectionStateChange: (state: ConnectionState) => void;
   onMetricsUpdate: (metrics: TurnMetrics) => void;
   onTranscriptUpdate: (entry: TranscriptEntry) => void;
+  onWhiteboardUpdate: (payload: WhiteboardPayload) => void;
 }
 
 /**
@@ -27,6 +28,7 @@ export default function SessionInner({
   onConnectionStateChange,
   onMetricsUpdate,
   onTranscriptUpdate,
+  onWhiteboardUpdate,
 }: SessionInnerProps) {
   const lkConnectionState: LKConnectionState = useConnectionState();
 
@@ -38,13 +40,30 @@ export default function SessionInner({
   }, [lkConnectionState, onConnectionStateChange, subject]);
 
   // Subscribe to the agent's data channel for metrics messages.
-  useDataChannel("metrics", (message) => {
-    const metrics = parseMetricsMessage(message.payload);
-    if (metrics !== null) {
-      logger.debug("metrics_received", { turn: metrics.turn });
-      onMetricsUpdate(metrics);
-    }
-  });
+  const handleMetrics = useCallback(
+    (message: { payload: Uint8Array }) => {
+      const metrics = parseMetricsMessage(message.payload);
+      if (metrics !== null) {
+        logger.debug("metrics_received", { turn: metrics.turn });
+        onMetricsUpdate(metrics);
+      }
+    },
+    [onMetricsUpdate],
+  );
+  useDataChannel("metrics", handleMetrics);
+
+  // Subscribe to the agent's data channel for whiteboard payloads.
+  const handleWhiteboard = useCallback(
+    (message: { payload: Uint8Array | string }) => {
+      const payload = parseWhiteboardPayload(message.payload);
+      if (payload !== null) {
+        logger.debug("whiteboard_received", { type: payload.type });
+        onWhiteboardUpdate(payload);
+      }
+    },
+    [onWhiteboardUpdate],
+  );
+  useDataChannel("whiteboard", handleWhiteboard);
 
   // Capture live transcriptions (both user STT and agent responses).
   // Agent speech: each response gets its own streamInfo.id — one bubble per reply.

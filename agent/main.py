@@ -5,12 +5,13 @@ This module starts the LiveKit AgentServer and wires together:
 - Simli AvatarSession for video rendering
 - MetricsCollector for latency tracking
 - SubjectRouterAgent as the initial agent
-- Lightweight HTTP health check server on port 8080
+- HTTP server on port 8080 for health checks and REST API endpoints
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 from dataclasses import dataclass
@@ -49,19 +50,82 @@ HEALTH_PORT = 8080
 
 
 class _HealthHandler(BaseHTTPRequestHandler):
-    """Minimal HTTP handler that responds to GET /health."""
+    """HTTP handler for health checks and REST API endpoints."""
 
     def do_GET(self) -> None:
         if self.path == "/health":
             body = json.dumps(health_check()).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-        else:
-            self.send_response(404)
-            self.end_headers()
+            self._send(200, body, "application/json")
+            return
+
+        # Delegate to API router
+        from src.api.router import handle_get
+
+        result = handle_get(self.path, self)
+        if result is not None:
+            body, status, content_type = result
+            self._send(status, body, content_type)
+            return
+
+        self.send_response(404)
+        self.end_headers()
+
+    def do_POST(self) -> None:
+        from src.api.router import handle_post
+
+        body = self._read_body()
+        result = handle_post(self.path, body, self)
+        if result is not None:
+            resp_body, status, content_type = result
+            self._send(status, resp_body, content_type)
+            return
+
+        self.send_response(404)
+        self.end_headers()
+
+    def do_PATCH(self) -> None:
+        from src.api.router import handle_patch
+
+        body = self._read_body()
+        result = handle_patch(self.path, body, self)
+        if result is not None:
+            resp_body, status, content_type = result
+            self._send(status, resp_body, content_type)
+            return
+
+        self.send_response(404)
+        self.end_headers()
+
+    def do_OPTIONS(self) -> None:
+        """Handle CORS preflight requests."""
+        self.send_response(204)
+        self._cors_headers()
+        self.end_headers()
+
+    def _send(self, status: int, body: bytes, content_type: str) -> None:
+        """Send a response with proper headers including CORS."""
+        self.send_response(status)
+        self._cors_headers()
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _cors_headers(self) -> None:
+        """Add CORS headers for frontend access."""
+        origin = os.getenv("ALLOWED_ORIGIN", "http://localhost:3000")
+        self.send_header("Access-Control-Allow-Origin", origin)
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-API-Key")
+
+    _MAX_BODY_BYTES = 15 * 1024 * 1024  # 15 MB (includes multipart overhead)
+
+    def _read_body(self) -> bytes:
+        """Read the request body, rejecting oversized payloads."""
+        length = int(self.headers.get("Content-Length", 0))
+        if length > self._MAX_BODY_BYTES:
+            return b""  # will be caught downstream
+        return self.rfile.read(length) if length > 0 else b""
 
     def log_message(self, format, *args) -> None:
         """Suppress default access logs — structlog handles our logging."""
@@ -287,9 +351,31 @@ async def entrypoint(ctx) -> None:
 
 
 if __name__ == "__main__":
+    import asyncio as _asyncio
+
     from livekit.agents import WorkerOptions, cli
 
     setup_logging()
+
+    # Initialize DB if configured — pool is shared via api.router module
+    _config = AppConfig.from_env()
+    if _config.database_url:
+        from src.api.router import set_db, set_event_loop
+        from src.db import Database
+
+        _db = Database()
+        _loop = _asyncio.new_event_loop()
+
+        _loop.run_until_complete(_db.connect(_config.database_url))
+        set_db(_db)
+        set_event_loop(_loop)
+
+        # Run the event loop in a background thread so coroutines can execute
+        _loop_thread = threading.Thread(target=_loop.run_forever, daemon=True)
+        _loop_thread.start()
+
+        logger.info("database_initialized_for_api")
+
     _start_health_server()
     logger.info("agent_server_starting")
 

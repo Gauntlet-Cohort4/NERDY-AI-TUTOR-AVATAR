@@ -5,8 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
 import { createLogger } from "@/lib/logger";
 import { getToken, computeMetricsAverages } from "@/lib/livekit";
-import type { Subject, TurnMetrics, MetricsAverages, ConnectionState } from "@/lib/types";
+import type { Subject, TurnMetrics, MetricsAverages, ConnectionState, WhiteboardPayload } from "@/lib/types";
 import AvatarDisplay from "@/components/AvatarDisplay";
+import AvatarPiP from "@/components/AvatarPiP";
+import WhiteboardCanvas from "@/components/WhiteboardCanvas";
 import ConnectionStatus from "@/components/ConnectionStatus";
 import LatencyOverlay from "@/components/LatencyOverlay";
 import SessionControls from "@/components/SessionControls";
@@ -62,6 +64,8 @@ function SessionContent() {
   const [transcriptEntries, setTranscriptEntries] = useState<readonly TranscriptEntry[]>([]);
   const [transcriptVisible, setTranscriptVisible] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
+  const [whiteboardPayload, setWhiteboardPayload] = useState<WhiteboardPayload | null>(null);
+  const [isWhiteboardActive, setIsWhiteboardActive] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,6 +110,11 @@ function SessionContent() {
       logger.debug("metrics_history_updated", { turn_count: updated.length });
       return updated;
     });
+  }, []);
+
+  const handleWhiteboardUpdate = useCallback((payload: WhiteboardPayload) => {
+    setWhiteboardPayload(payload);
+    setIsWhiteboardActive(true);
   }, []);
 
   const handleToggleMetrics = useCallback(() => {
@@ -196,6 +205,7 @@ function SessionContent() {
         onConnectionStateChange={handleConnectionStateChange}
         onMetricsUpdate={handleMetricsUpdate}
         onTranscriptUpdate={handleTranscriptUpdate}
+        onWhiteboardUpdate={handleWhiteboardUpdate}
       />
       <div className="flex min-h-screen bg-gray-950 text-white">
         <main className="flex flex-1 flex-col">
@@ -207,10 +217,17 @@ function SessionContent() {
             <ConnectionStatus state={connectionState} />
           </header>
           <div className="flex-1 flex items-center justify-center p-6">
-            <div className="w-full max-w-3xl">
-              <AvatarDisplay />
-            </div>
+            {isWhiteboardActive ? (
+              <div className="w-full max-w-4xl h-full">
+                <WhiteboardCanvas payload={whiteboardPayload} />
+              </div>
+            ) : (
+              <div className="w-full max-w-3xl">
+                <AvatarDisplay />
+              </div>
+            )}
           </div>
+          <AvatarPiP isActive={isWhiteboardActive} />
           <LatencyOverlay
             metrics={latestMetrics}
             averages={metricsAverages}

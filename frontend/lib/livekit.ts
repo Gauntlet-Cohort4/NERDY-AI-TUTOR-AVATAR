@@ -1,5 +1,5 @@
 import { ConnectionState as LKConnectionState } from "livekit-client";
-import type { ConnectionState, MetricsAverages, TurnMetrics } from "./types";
+import type { ConnectionState, MetricsAverages, TurnMetrics, WhiteboardPayload } from "./types";
 import { createLogger } from "./logger";
 
 const logger = createLogger("livekit");
@@ -98,6 +98,61 @@ export function computeMetricsAverages(
     total_e2e_ms: sum.total_e2e_ms / count,
     turn_count: count,
   };
+}
+
+/**
+ * Valid whiteboard payload types.
+ */
+const WHITEBOARD_TYPES = new Set<string>([
+  "equation",
+  "image",
+  "svg_diagram",
+  "interactive",
+  "generating",
+]);
+
+/**
+ * Decode and validate a whiteboard data channel payload.
+ * Returns a WhiteboardPayload if the message is valid, or null otherwise.
+ */
+export function parseWhiteboardPayload(data: Uint8Array | string): WhiteboardPayload | null {
+  try {
+    const text = typeof data === "string" ? data : new TextDecoder().decode(data);
+    const parsed: unknown = JSON.parse(text);
+
+    if (typeof parsed !== "object" || parsed === null) {
+      logger.warn("whiteboard_payload_not_object");
+      return null;
+    }
+
+    const obj = parsed as Record<string, unknown>;
+
+    if (typeof obj.type !== "string" || !WHITEBOARD_TYPES.has(obj.type)) {
+      logger.warn("whiteboard_payload_invalid_type", { type: obj.type });
+      return null;
+    }
+
+    const payload: WhiteboardPayload = {
+      type: obj.type as WhiteboardPayload["type"],
+    };
+
+    if (typeof obj.content === "string") payload.content = obj.content;
+    if (typeof obj.latex === "string") payload.latex = obj.latex;
+    if (typeof obj.title === "string") payload.title = obj.title;
+    if (typeof obj.alt_text === "string") payload.alt_text = obj.alt_text;
+    if (typeof obj.template_id === "string") payload.template_id = obj.template_id;
+    if (typeof obj.description === "string") payload.description = obj.description;
+    if (typeof obj.params === "object" && obj.params !== null) {
+      payload.params = obj.params as Record<string, unknown>;
+    }
+
+    return payload;
+  } catch (err) {
+    logger.warn("whiteboard_payload_parse_error", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
 }
 
 /**

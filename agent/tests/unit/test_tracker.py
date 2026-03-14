@@ -112,37 +112,61 @@ class TestHistoryImmutability:
             assert histories[i] is not histories[i + 1]
 
 
+def _make_mock_loop(task_done: bool = True):
+    """Create a mock event loop whose create_task closes coroutines to avoid warnings.
+
+    Returns (mock_loop, recorded_calls) where recorded_calls is a list of
+    (coroutine_qualname, mock_task) tuples for inspection.
+    """
+    recorded_calls: list[tuple[str, MagicMock]] = []
+
+    def _fake_create_task(coro):
+        qualname = getattr(coro, "__qualname__", "") or getattr(coro, "cr_qualname", "")
+        coro.close()  # prevent "coroutine was never awaited" warning
+        mock_task = MagicMock(done=MagicMock(return_value=task_done))
+        recorded_calls.append((qualname, mock_task))
+        return mock_task
+
+    mock_loop = MagicMock()
+    mock_loop.create_task.side_effect = _fake_create_task
+    return mock_loop, recorded_calls
+
+
 class TestSummarizationTrigger:
+    @staticmethod
+    def _count_summarization_calls(recorded_calls):
+        """Count create_task calls for summarization (not persist)."""
+        return sum(1 for name, _ in recorded_calls if "summarization" in name.lower())
+
     def test_summarization_triggered_at_threshold(self):
         threshold = 4
         tracker, _ = _make_tracker(threshold=threshold)
 
-        with patch("asyncio.create_task") as mock_create_task:
-            mock_create_task.return_value = MagicMock(done=MagicMock(return_value=True))
+        mock_loop, recorded = _make_mock_loop(task_done=True)
+        with patch("asyncio.get_running_loop", return_value=mock_loop):
             for i in range(threshold):
                 tracker.on_conversation_item(_make_event("user", f"Turn {i}"))
 
-            mock_create_task.assert_called_once()
+            assert self._count_summarization_calls(recorded) == 1
 
     def test_summarization_not_triggered_below_threshold(self):
         threshold = 6
         tracker, _ = _make_tracker(threshold=threshold)
 
-        with patch("asyncio.create_task") as mock_create_task:
+        mock_loop, recorded = _make_mock_loop(task_done=True)
+        with patch("asyncio.get_running_loop", return_value=mock_loop):
             for i in range(threshold - 1):
                 tracker.on_conversation_item(_make_event("user", f"Turn {i}"))
 
-            mock_create_task.assert_not_called()
+            assert self._count_summarization_calls(recorded) == 0
 
     def test_summarization_not_retriggered_while_inflight(self):
         threshold = 4
         tracker, _ = _make_tracker(threshold=threshold)
 
-        with patch("asyncio.create_task") as mock_create_task:
-            # First task still in flight
-            mock_task = MagicMock(done=MagicMock(return_value=False))
-            mock_create_task.return_value = mock_task
-
+        # Task stays in-flight (done=False)
+        mock_loop, recorded = _make_mock_loop(task_done=False)
+        with patch("asyncio.get_running_loop", return_value=mock_loop):
             # Reach first threshold
             for i in range(threshold):
                 tracker.on_conversation_item(_make_event("user", f"Turn {i}"))
@@ -151,18 +175,15 @@ class TestSummarizationTrigger:
             for i in range(threshold):
                 tracker.on_conversation_item(_make_event("user", f"Turn {threshold + i}"))
 
-            # Should only have been called once (first threshold)
-            assert mock_create_task.call_count == 1
+            # Should only have 1 summarization call (first threshold)
+            assert self._count_summarization_calls(recorded) == 1
 
     def test_summarization_retriggered_after_previous_done(self):
         threshold = 4
         tracker, _ = _make_tracker(threshold=threshold)
 
-        with patch("asyncio.create_task") as mock_create_task:
-            # First task completes
-            mock_task = MagicMock(done=MagicMock(return_value=True))
-            mock_create_task.return_value = mock_task
-
+        mock_loop, recorded = _make_mock_loop(task_done=True)
+        with patch("asyncio.get_running_loop", return_value=mock_loop):
             # Reach first threshold
             for i in range(threshold):
                 tracker.on_conversation_item(_make_event("user", f"Turn {i}"))
@@ -171,8 +192,8 @@ class TestSummarizationTrigger:
             for i in range(threshold):
                 tracker.on_conversation_item(_make_event("user", f"Turn {threshold + i}"))
 
-            # Should have been called twice
-            assert mock_create_task.call_count == 2
+            # Should have 2 summarization calls
+            assert self._count_summarization_calls(recorded) == 2
 
 
 class TestSummarizationExecution:

@@ -47,8 +47,13 @@ venv/
 
 # Coverage
 coverage/
+.coverage
 .nyc_output/
 htmlcov/
+
+# Build artifacts
+tsconfig.tsbuildinfo
+*.tsbuildinfo
 
 # Design reference files (not part of the app)
 nerdy-landing-design-prompt.md

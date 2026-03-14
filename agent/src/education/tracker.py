@@ -35,6 +35,9 @@ class ConversationTracker:
         self._llm_callable = llm_callable
         self._turn_count = 0
         self._summarization_task: asyncio.Task | None = None
+        self._pending_tasks: set[asyncio.Task] = set()
+        self._db_pool = None  # set externally when DB is available
+        self._session_id = None  # set when session starts
 
     @property
     def history(self) -> ConversationHistory:
@@ -83,6 +86,20 @@ class ConversationTracker:
         )
         self._history = self._history.add_turn(turn)
 
+        # Fire-and-forget DB write — never blocks the pipeline.
+        # Check for a running loop *before* creating the coroutine to avoid
+        # "coroutine was never awaited" warnings in synchronous tests.
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None:
+            task = loop.create_task(self._persist_turn(turn))
+            self._pending_tasks.add(task)
+            task.add_done_callback(self._pending_tasks.discard)
+        else:
+            logger.warning("turn_persist_skipped_no_event_loop", turn_number=turn.turn_number)
+
         logger.debug("conversation_tracked", turn=self._turn_count, role=mapped_role)
 
         # Trigger summarization at threshold
@@ -93,8 +110,29 @@ class ConversationTracker:
             and (self._summarization_task is None or self._summarization_task.done())
         ):
             logger.info("summarization_triggered", turn_count=self._turn_count)
-            self._summarization_task = asyncio.create_task(
-                self._run_summarization()
+            if loop is not None:
+                self._summarization_task = loop.create_task(
+                    self._run_summarization()
+                )
+
+    async def _persist_turn(self, turn: ConversationTurn) -> None:
+        """Fire-and-forget DB write — never blocks the pipeline."""
+        if self._db_pool is None or self._session_id is None:
+            return
+        try:
+            from src.db.sessions import add_turn
+
+            await add_turn(
+                self._db_pool,
+                self._session_id,
+                turn.turn_number,
+                turn.role,
+                turn.content,
+                metrics=turn.metrics.__dict__ if turn.metrics else None,
+            )
+        except Exception:
+            logger.warning(
+                "turn_persist_failed", turn=turn.turn_number, exc_info=True,
             )
 
     async def _run_summarization(self) -> None:

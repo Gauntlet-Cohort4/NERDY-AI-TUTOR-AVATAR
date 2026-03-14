@@ -3,7 +3,11 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createLogger } from "@/lib/logger";
-import type { Subject } from "@/lib/types";
+import { getUserId } from "@/lib/user";
+import { listSessions, getFlashCardStats } from "@/lib/api";
+import ToastNotification from "@/components/ToastNotification";
+import type { Toast } from "@/components/ToastNotification";
+import type { Subject, Session, FlashCardStats } from "@/lib/types";
 
 const logger = createLogger("LandingPage");
 
@@ -212,6 +216,8 @@ function LiveIndicator() {
 }
 
 function Navbar() {
+  const router = useRouter();
+
   return (
     <nav
       className="sticky top-0 z-50 flex items-center justify-between px-10 py-4"
@@ -232,13 +238,36 @@ function Navbar() {
           Nerdy AI Tutor
         </span>
       </div>
-      <span
-        className="text-white text-sm font-medium px-5 py-2 rounded-lg"
-        style={{ border: "1.5px solid rgba(255,255,255,0.2)" }}
-        aria-hidden="true"
-      >
-        Sign In
-      </span>
+      <div className="flex items-center gap-4">
+        <button
+          onClick={() => router.push("/upload")}
+          className="text-white/70 text-sm font-medium px-4 py-2 rounded-lg hover:text-white hover:bg-white/5 transition-colors bg-transparent border-none cursor-pointer"
+          style={{ fontFamily: "inherit" }}
+        >
+          Upload Worksheet
+        </button>
+        <button
+          onClick={() => router.push("/flash-cards")}
+          className="text-white/70 text-sm font-medium px-4 py-2 rounded-lg hover:text-white hover:bg-white/5 transition-colors bg-transparent border-none cursor-pointer"
+          style={{ fontFamily: "inherit" }}
+        >
+          Flash Cards
+        </button>
+        <button
+          onClick={() => router.push("/reviews")}
+          className="text-white/70 text-sm font-medium px-4 py-2 rounded-lg hover:text-white hover:bg-white/5 transition-colors bg-transparent border-none cursor-pointer"
+          style={{ fontFamily: "inherit" }}
+        >
+          All Reviews
+        </button>
+        <span
+          className="text-white text-sm font-medium px-5 py-2 rounded-lg"
+          style={{ border: "1.5px solid rgba(255,255,255,0.2)" }}
+          aria-hidden="true"
+        >
+          Sign In
+        </span>
+      </div>
     </nav>
   );
 }
@@ -448,6 +477,116 @@ function Footer() {
 // Main Page
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Flash Card Stats Section
+// ---------------------------------------------------------------------------
+
+function FlashCardSection({
+  stats,
+  loading,
+}: {
+  readonly stats: Readonly<Record<string, FlashCardStats>>;
+  readonly loading: boolean;
+}) {
+  const router = useRouter();
+  const subjects = Object.entries(stats);
+
+  if (loading) return null;
+  if (subjects.length === 0) return null;
+
+  return (
+    <section className="mx-auto" style={{ padding: "0 20px 40px", maxWidth: 900 }}>
+      <div className="flex items-center justify-between mb-4">
+        <p
+          className="uppercase font-semibold"
+          style={{ color: "#506480", fontSize: 12, letterSpacing: "0.15em" }}
+        >
+          Flash Cards
+        </p>
+      </div>
+      <div className="flex gap-4 flex-wrap">
+        {subjects.map(([subject, stat]) => {
+          const total = stat.total;
+          if (total === 0) return null;
+          const knownPct = Math.round((stat.known / total) * 100);
+          const learningPct = Math.round((stat.learning / total) * 100);
+          return (
+            <div
+              key={subject}
+              className="flex-1 min-w-[200px] max-w-[280px] bg-gray-800/40 border border-gray-700 rounded-lg p-4"
+            >
+              <p className="text-sm font-medium text-white capitalize mb-2">
+                {subject.replace("_", " ")}
+              </p>
+              <p className="text-xs text-gray-500 mb-2">{total} cards</p>
+              <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden flex">
+                <div
+                  className="h-full bg-green-400"
+                  style={{ width: `${knownPct}%` }}
+                />
+                <div
+                  className="h-full bg-amber-400"
+                  style={{ width: `${learningPct}%` }}
+                />
+              </div>
+              <div className="flex gap-3 mt-2 text-xs text-gray-500">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-green-400" />
+                  {stat.known} known
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  {stat.learning} learning
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-gray-500" />
+                  {stat.new} new
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Session Badge Helper
+// ---------------------------------------------------------------------------
+
+function SubjectSessionBadge({
+  sessions,
+}: {
+  readonly sessions: readonly Session[];
+}) {
+  const completedCount = sessions.filter((s) => s.status === "completed").length;
+  const activeCount = sessions.filter((s) => s.status === "active").length;
+
+  if (completedCount === 0 && activeCount === 0) return null;
+
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      {completedCount > 0 && (
+        <span className="flex items-center gap-1 text-[11px] text-green-400">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+          {completedCount} review{completedCount !== 1 ? "s" : ""}
+        </span>
+      )}
+      {activeCount > 0 && (
+        <span className="flex items-center gap-1 text-[11px] text-amber-400">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+          generating
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main Page
+// ---------------------------------------------------------------------------
+
 export default function Home() {
   const router = useRouter();
   const [selectedGrade, setSelectedGrade] = useState<string | null>(null);
@@ -455,10 +594,77 @@ export default function Home() {
   const [hoveredGrade, setHoveredGrade] = useState<string | null>(null);
   const [hoveredSubject, setHoveredSubject] = useState<Subject | null>(null);
   const [subjectsVisible, setSubjectsVisible] = useState(false);
+  const [sessions, setSessions] = useState<readonly Session[]>([]);
+  const [flashCardStats, setFlashCardStats] = useState<
+    Readonly<Record<string, FlashCardStats>>
+  >({});
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [toasts, setToasts] = useState<readonly Toast[]>([]);
 
   const subjects = useMemo(
     () => (selectedGrade ? getSubjectsForGrade(selectedGrade) : []),
     [selectedGrade],
+  );
+
+  // Fetch sessions and flash card stats on mount
+  useEffect(() => {
+    const userId = getUserId();
+    if (!userId) {
+      setDashboardLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function fetchDashboardData() {
+      try {
+        const [sessionsData, statsData] = await Promise.allSettled([
+          listSessions(userId!),
+          getFlashCardStats(userId!),
+        ]);
+
+        if (!cancelled) {
+          if (sessionsData.status === "fulfilled") {
+            setSessions(sessionsData.value);
+          } else {
+            logger.warn("sessions_fetch_failed", {
+              error: String(sessionsData.reason),
+            });
+          }
+
+          if (statsData.status === "fulfilled") {
+            setFlashCardStats(statsData.value);
+          } else {
+            logger.warn("flash_card_stats_fetch_failed", {
+              error: String(statsData.reason),
+            });
+          }
+
+          setDashboardLoading(false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          logger.error("dashboard_fetch_failed", { error: String(err) });
+          setDashboardLoading(false);
+        }
+      }
+    }
+
+    fetchDashboardData();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const sessionsForSubject = useCallback(
+    (subject: Subject): readonly Session[] => {
+      return sessions.filter((s) => s.subject === subject);
+    },
+    [sessions],
   );
 
   // Reset subject animation when grade changes
@@ -598,6 +804,7 @@ export default function Home() {
                   <div className="font-normal" style={{ fontSize: 13, color: "#6a7f99" }}>
                     {subj.topic}
                   </div>
+                  <SubjectSessionBadge sessions={sessionsForSubject(subj.subject)} />
                 </button>
               );
             })}
@@ -636,7 +843,15 @@ export default function Home() {
       {/* Features Row (shown when no grade selected) */}
       {!selectedGrade && <FeaturesRow />}
 
+      {/* Flash Card Stats (shown when no grade selected and data exists) */}
+      {!selectedGrade && (
+        <FlashCardSection stats={flashCardStats} loading={dashboardLoading} />
+      )}
+
       <Footer />
+
+      {/* Toast Notifications */}
+      <ToastNotification toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

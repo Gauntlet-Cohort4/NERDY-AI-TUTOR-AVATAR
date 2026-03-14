@@ -114,12 +114,18 @@ class MetricsCollector:
             )
 
             # Publish to data channel so the frontend overlay updates in real time.
-            # asyncio.create_task requires a running loop (always present in
-            # the LiveKit agent worker; absent in synchronous unit tests).
+            # asyncio.get_running_loop() is always present in the LiveKit agent
+            # worker; absent in synchronous unit tests.  We check for a running
+            # loop *before* creating the coroutine to avoid "coroutine was never
+            # awaited" warnings.
             try:
-                asyncio.create_task(self._publish_turn_metrics(turn))
+                loop = asyncio.get_running_loop()
             except RuntimeError:
-                pass  # No running event loop (test environment)
+                loop = None
+            if loop is not None:
+                loop.create_task(self._publish_turn_metrics(turn))
+            else:
+                logger.debug("no_event_loop_for_metrics_publish", session_id=self.session_id)
         else:
             # VADMetrics, EOUMetrics, RealtimeModelMetrics — log but don't
             # incorporate into turn timing.

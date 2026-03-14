@@ -58,6 +58,18 @@ class AppConfig:
     token_budget: int = 2000
     vad_silence_threshold_ms: int = 500
 
+    # Database (optional — degrades gracefully if missing)
+    database_url: str | None = None
+
+    # Artifacts
+    artifact_context_turns: int = 20
+
+    # Vision / Image generation
+    groq_vision_model: str = "llama-4-scout-17b-16e-instruct"
+    image_gen_provider: str = "none"
+    image_gen_api_key: str = ""
+    image_gen_model: str = ""
+
     @classmethod
     def from_env(cls) -> "AppConfig":
         """Load config from environment variables. Fails fast on missing required vars."""
@@ -91,10 +103,26 @@ class AppConfig:
             simli_api_key=os.environ["SIMLI_API_KEY"],
             simli_face_id=os.environ["SIMLI_FACE_ID"],
             log_level=os.getenv("LOG_LEVEL", "INFO"),
+            database_url=os.getenv("DATABASE_URL"),
+            artifact_context_turns=int(os.getenv("ARTIFACT_CONTEXT_TURNS", "20")),
+            groq_vision_model=os.getenv(
+                "GROQ_VISION_MODEL", "llama-4-scout-17b-16e-instruct"
+            ),
+            image_gen_provider=os.getenv("IMAGE_GEN_PROVIDER", "none"),
+            image_gen_api_key=os.getenv("IMAGE_GEN_API_KEY", ""),
+            image_gen_model=os.getenv("IMAGE_GEN_MODEL", ""),
         )
+
+        if config.database_url is None:
+            logger.warning(
+                "database_url_missing",
+                msg="Running without persistence — session records, artifacts, and flash cards disabled",
+            )
+
         logger.info(
             "config_loaded",
             livekit_url=config.livekit_url,
             groq_model=config.groq_model,
+            database_configured=config.database_url is not None,
         )
         return config

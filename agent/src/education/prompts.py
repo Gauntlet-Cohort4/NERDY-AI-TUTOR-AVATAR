@@ -247,7 +247,53 @@ def _apply_grade(prompt: str, grade: int) -> str:
     return prompt
 
 
-def get_system_prompt(subject: Subject, grade: int | None = None) -> str:
+def get_visual_instructions(
+    subject: str,
+    available_topics: list[str] | None = None,
+    available_templates: list[str] | None = None,
+) -> str:
+    """Generate whiteboard tool instructions for a subject agent's system prompt.
+
+    Args:
+        subject: Subject name (e.g. ``"math"``).
+        available_topics: Pre-cached topic keys the agent can reference
+            with ``show_diagram``.  Pass ``None`` or ``[]`` when no cache
+            has been populated yet.
+        available_templates: Interactive template IDs available for this
+            subject.  Pass ``None`` or ``[]`` when none apply.
+
+    Returns:
+        A multi-line instruction block to append to the system prompt.
+    """
+    topics_list = ", ".join(available_topics) if available_topics else "none cached yet"
+    templates_list = ", ".join(available_templates) if available_templates else "none available"
+
+    return (
+        "\n\nYou have access to visual tools to help the student understand concepts:\n\n"
+        "- show_equation(latex, title): Display a math equation. "
+        "Use whenever you reference a formula.\n"
+        "- show_diagram(topic_key): Show a cached educational diagram. "
+        f"Available topics: {topics_list}\n"
+        "- show_interactive(template_id, params): Show an interactive diagram. "
+        f"Available templates: {templates_list}\n"
+        "- generate_visual(description, topic_key): Generate an image when no "
+        "cached visual exists. Takes several seconds.\n\n"
+        "Visual guidelines:\n"
+        "- Show a visual early in the conversation to engage the student.\n"
+        "- Update the whiteboard when the topic shifts.\n"
+        "- For math: always render equations with show_equation rather than "
+        "typing them in text.\n"
+        "- For science: prefer diagrams over text descriptions.\n"
+        "- Do not show more than one visual per conversational turn."
+    )
+
+
+def get_system_prompt(
+    subject: Subject,
+    grade: int | None = None,
+    available_topics: list[str] | None = None,
+    available_templates: list[str] | None = None,
+) -> str:
     """Return the Socratic system prompt for the given subject.
 
     Includes a subject-boundary guardrail that instructs the agent to
@@ -259,9 +305,15 @@ def get_system_prompt(subject: Subject, grade: int | None = None) -> str:
     level.  When ``None``, the default grade baked into the prompt
     template is used.
 
+    When ``available_topics`` or ``available_templates`` are supplied,
+    whiteboard tool instructions are appended so the LLM knows how and
+    when to invoke visual aids.
+
     Args:
         subject: The Subject enum value to look up.
         grade: Optional grade level (6-12) to adjust language complexity.
+        available_topics: Pre-cached topic keys for show_diagram.
+        available_templates: Interactive template IDs for show_interactive.
 
     Returns:
         A non-empty system prompt string tailored to the subject.
@@ -273,4 +325,9 @@ def get_system_prompt(subject: Subject, grade: int | None = None) -> str:
     if grade is not None:
         base_prompt = _apply_grade(base_prompt, grade)
     boundary = _boundary_clause(subject)
-    return f"{base_prompt}\n\n{boundary}"
+    visual_section = get_visual_instructions(
+        subject.value,
+        available_topics=available_topics,
+        available_templates=available_templates,
+    )
+    return f"{base_prompt}\n\n{boundary}{visual_section}"

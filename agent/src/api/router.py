@@ -119,6 +119,9 @@ def _run_async(coro):
 _SESSIONS_LIST = re.compile(r"^/api/sessions$")
 _SESSION_EVENTS = re.compile(r"^/api/sessions/([^/]+)/events$")
 _SESSION_DETAIL = re.compile(r"^/api/sessions/([^/]+)$")
+_SESSION_SUMMARY = re.compile(r"^/api/sessions/([^/]+)/summary$")
+_SESSION_WORKSHEET = re.compile(r"^/api/sessions/([^/]+)/worksheet$")
+_SESSION_CHEAT_SHEET = re.compile(r"^/api/sessions/([^/]+)/cheat-sheet$")
 _SESSION_ARTIFACTS = re.compile(r"^/api/sessions/([^/]+)/artifacts$")
 _SESSION_TRANSCRIPT = re.compile(r"^/api/sessions/([^/]+)/transcript$")
 _SESSION_QUIZ_CHECK = re.compile(r"^/api/sessions/([^/]+)/review-quiz/check$")
@@ -331,6 +334,36 @@ def handle_post(path: str, body: bytes, handler=None) -> tuple[bytes, int, str] 
         if session_id is None:
             return _error_response("Invalid session_id UUID", 400)
         return _handle_review_quiz(pool, session_id)
+
+    # POST /api/sessions/<id>/summary
+    match = _SESSION_SUMMARY.match(url_path)
+    if match:
+        if pool is None:
+            return _no_db_response()
+        session_id = _parse_uuid(match.group(1))
+        if session_id is None:
+            return _error_response("Invalid session_id UUID", 400)
+        return _handle_generate_summary(pool, session_id)
+
+    # POST /api/sessions/<id>/worksheet
+    match = _SESSION_WORKSHEET.match(url_path)
+    if match:
+        if pool is None:
+            return _no_db_response()
+        session_id = _parse_uuid(match.group(1))
+        if session_id is None:
+            return _error_response("Invalid session_id UUID", 400)
+        return _handle_generate_worksheet(pool, session_id)
+
+    # POST /api/sessions/<id>/cheat-sheet
+    match = _SESSION_CHEAT_SHEET.match(url_path)
+    if match:
+        if pool is None:
+            return _no_db_response()
+        session_id = _parse_uuid(match.group(1))
+        if session_id is None:
+            return _error_response("Invalid session_id UUID", 400)
+        return _handle_generate_cheat_sheet(pool, session_id)
 
     # POST /api/uploads
     match = _UPLOADS_LIST.match(url_path)
@@ -579,6 +612,174 @@ def _handle_review_quiz(
         return _error_response("Session not found", 404)
     except Exception:
         logger.exception("review_quiz_generation_failed")
+        return _error_response("Internal server error", 500)
+
+
+def _handle_generate_summary(
+    pool, session_id: UUID,
+) -> tuple[bytes, int, str]:
+    """Generate a session summary on demand."""
+    try:
+        from src.artifacts.generator import generate_summary
+        from src.config import AppConfig
+        from src.db import artifacts as artifacts_db
+        from src.db import sessions as sessions_db
+
+        config = AppConfig.from_env()
+        session = _run_async(sessions_db.get_session(pool, session_id))
+        if session is None:
+            return _error_response("Session not found", 404)
+
+        # Ensure artifact record exists before generating
+        existing = _run_async(artifacts_db.list_artifacts(pool, session_id))
+        if not any(a["artifact_type"] == "summary" for a in existing):
+            _run_async(artifacts_db.create_artifact(
+                pool, session_id, "summary", "Session Summary",
+            ))
+
+        summary_text = _run_async(
+            generate_summary(
+                pool, session_id,
+                summary_cache=session.get("summary_cache"),
+                groq_model=config.groq_model,
+                artifact_context_turns=config.artifact_context_turns,
+            ),
+        )
+        if not summary_text or not summary_text.strip():
+            return _error_response("Not enough conversation data to generate summary", 400)
+        return _json_response({"summary": summary_text}, 201)
+    except ValueError:
+        return _error_response("Session not found", 404)
+    except Exception:
+        logger.exception("summary_generation_failed")
+        return _error_response("Internal server error", 500)
+
+
+def _handle_generate_worksheet(
+    pool, session_id: UUID,
+) -> tuple[bytes, int, str]:
+    """Generate a worksheet for a session on demand."""
+    try:
+        from src.artifacts.generator import generate_summary, generate_worksheet
+        from src.config import AppConfig
+        from src.db import artifacts as artifacts_db
+        from src.db import sessions as sessions_db
+
+        config = AppConfig.from_env()
+
+        session = _run_async(sessions_db.get_session(pool, session_id))
+        if session is None:
+            return _error_response("Session not found", 404)
+        subject = session.get("subject", "general")
+        grade = session.get("grade", 7)
+
+        # Ensure artifact records exist
+        existing = _run_async(artifacts_db.list_artifacts(pool, session_id))
+        existing_types = {a["artifact_type"] for a in existing}
+        if "summary" not in existing_types:
+            _run_async(artifacts_db.create_artifact(
+                pool, session_id, "summary", "Session Summary",
+            ))
+        if "worksheet" not in existing_types:
+            _run_async(artifacts_db.create_artifact(
+                pool, session_id, "worksheet", f"Practice Worksheet: {subject}",
+            ))
+
+        # Reuse existing summary if ready, else generate
+        summary_art = next(
+            (a for a in existing if a["artifact_type"] == "summary" and a.get("status") == "ready"),
+            None,
+        )
+        if summary_art and isinstance(summary_art.get("content_json"), dict):
+            summary_text = summary_art["content_json"].get("text", "")
+        else:
+            summary_text = _run_async(
+                generate_summary(
+                    pool, session_id,
+                    summary_cache=session.get("summary_cache"),
+                    groq_model=config.groq_model,
+                    artifact_context_turns=config.artifact_context_turns,
+                ),
+            )
+        if not summary_text or not summary_text.strip():
+            return _error_response("Not enough conversation data to generate worksheet", 400)
+
+        worksheet = _run_async(
+            generate_worksheet(
+                pool, session_id, summary_text, subject, grade,
+                groq_model=config.groq_model,
+                artifact_context_turns=config.artifact_context_turns,
+            ),
+        )
+        return _json_response(worksheet, 201)
+    except ValueError:
+        return _error_response("Session not found", 404)
+    except Exception:
+        logger.exception("worksheet_generation_failed")
+        return _error_response("Internal server error", 500)
+
+
+def _handle_generate_cheat_sheet(
+    pool, session_id: UUID,
+) -> tuple[bytes, int, str]:
+    """Generate a cheat sheet for a session on demand."""
+    try:
+        from src.artifacts.generator import generate_cheat_sheet, generate_summary
+        from src.config import AppConfig
+        from src.db import artifacts as artifacts_db
+        from src.db import sessions as sessions_db
+
+        config = AppConfig.from_env()
+
+        session = _run_async(sessions_db.get_session(pool, session_id))
+        if session is None:
+            return _error_response("Session not found", 404)
+        subject = session.get("subject", "general")
+        grade = session.get("grade", 7)
+
+        # Ensure artifact records exist
+        existing = _run_async(artifacts_db.list_artifacts(pool, session_id))
+        existing_types = {a["artifact_type"] for a in existing}
+        if "summary" not in existing_types:
+            _run_async(artifacts_db.create_artifact(
+                pool, session_id, "summary", "Session Summary",
+            ))
+        if "cheat_sheet" not in existing_types:
+            _run_async(artifacts_db.create_artifact(
+                pool, session_id, "cheat_sheet", f"Cheat Sheet: {subject}",
+            ))
+
+        # Reuse existing summary if ready, else generate
+        summary_art = next(
+            (a for a in existing if a["artifact_type"] == "summary" and a.get("status") == "ready"),
+            None,
+        )
+        if summary_art and isinstance(summary_art.get("content_json"), dict):
+            summary_text = summary_art["content_json"].get("text", "")
+        else:
+            summary_text = _run_async(
+                generate_summary(
+                    pool, session_id,
+                    summary_cache=session.get("summary_cache"),
+                    groq_model=config.groq_model,
+                    artifact_context_turns=config.artifact_context_turns,
+                ),
+            )
+        if not summary_text or not summary_text.strip():
+            return _error_response("Not enough conversation data to generate cheat sheet", 400)
+
+        cheat_sheet = _run_async(
+            generate_cheat_sheet(
+                pool, session_id, summary_text, subject, grade,
+                groq_model=config.groq_model,
+                artifact_context_turns=config.artifact_context_turns,
+            ),
+        )
+        return _json_response(cheat_sheet, 201)
+    except ValueError:
+        return _error_response("Session not found", 404)
+    except Exception:
+        logger.exception("cheat_sheet_generation_failed")
         return _error_response("Internal server error", 500)
 
 

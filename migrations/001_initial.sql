@@ -56,6 +56,10 @@ CREATE TABLE IF NOT EXISTS artifacts (
 
 CREATE INDEX IF NOT EXISTS idx_artifacts_session ON artifacts(session_id);
 CREATE INDEX IF NOT EXISTS idx_artifacts_type_status ON artifacts(artifact_type, status);
+-- review_quiz is the only type that can have multiple records per session
+-- (one per on-demand request). All others are 1:1 with session.
+ALTER TABLE artifacts ADD CONSTRAINT uq_artifacts_session_type
+    UNIQUE (session_id, artifact_type);
 
 -- ─── Flash Cards ────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS flash_cards (

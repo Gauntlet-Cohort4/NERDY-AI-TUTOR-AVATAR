@@ -54,6 +54,31 @@ class ConversationTracker:
         """Return the number of tracked conversation turns."""
         return self._turn_count
 
+    async def flush(self) -> None:
+        """Await all pending fire-and-forget tasks before session teardown.
+
+        Call this in the disconnect handler before generating artifacts so that
+        all DB writes are committed and readable by the artifact queries.
+        """
+        # Snapshot and clear to avoid set-mutation during gather
+        pending = set(self._pending_tasks)
+        self._pending_tasks.clear()
+        pending_count = len(pending)
+
+        if pending:
+            results = await asyncio.gather(*pending, return_exceptions=True)
+            for r in results:
+                if isinstance(r, Exception) and not isinstance(r, asyncio.CancelledError):
+                    logger.warning("pending_task_flush_error", error=str(r))
+
+        if self._summarization_task is not None and not self._summarization_task.done():
+            results = await asyncio.gather(self._summarization_task, return_exceptions=True)
+            for r in results:
+                if isinstance(r, Exception) and not isinstance(r, asyncio.CancelledError):
+                    logger.warning("summarization_flush_error", error=str(r))
+
+        logger.debug("tracker_flushed", flushed_tasks=pending_count)
+
     def on_conversation_item(self, event) -> None:
         """Handle conversation_item_added events from AgentSession.
 

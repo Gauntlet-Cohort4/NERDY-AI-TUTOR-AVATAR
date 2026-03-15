@@ -22,24 +22,44 @@ async def create_artifact(
     artifact_type: str,
     title: str,
 ) -> UUID:
-    """Create a pending artifact record and return its id."""
-    row = await pool.fetchrow(
-        """
-        INSERT INTO artifacts (session_id, artifact_type, title)
-        VALUES ($1, $2, $3)
-        RETURNING id
-        """,
-        session_id,
-        artifact_type,
-        title,
-    )
-    artifact_id: UUID = row["id"]
-    logger.info(
-        "artifact_created",
-        artifact_id=str(artifact_id),
-        artifact_type=artifact_type,
-    )
-    return artifact_id
+    """Create an artifact record and return its id.
+
+    If a record with the same (session_id, artifact_type) already exists,
+    logs an error and returns the existing record's id.
+    """
+    try:
+        row = await pool.fetchrow(
+            """
+            INSERT INTO artifacts (session_id, artifact_type, title)
+            VALUES ($1, $2, $3)
+            RETURNING id
+            """,
+            session_id,
+            artifact_type,
+            title,
+        )
+        artifact_id: UUID = row["id"]
+        logger.info(
+            "artifact_created",
+            artifact_id=str(artifact_id),
+            artifact_type=artifact_type,
+        )
+        return artifact_id
+    except asyncpg.exceptions.UniqueViolationError:
+        logger.error(
+            "artifact_duplicate_insert",
+            session_id=str(session_id),
+            artifact_type=artifact_type,
+        )
+        existing = await pool.fetchrow(
+            """
+            SELECT id FROM artifacts
+            WHERE session_id = $1 AND artifact_type = $2
+            """,
+            session_id,
+            artifact_type,
+        )
+        return existing["id"]
 
 
 async def update_content(

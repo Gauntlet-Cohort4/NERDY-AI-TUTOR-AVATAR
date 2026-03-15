@@ -66,7 +66,8 @@ async def generate_summary(
     recent_turns.reverse()  # chronological order
 
     if _count_student_turns(recent_turns) < _MIN_STUDENT_TURNS:
-        return _not_enough_data_response(session_id, "summary").get("detail", "")
+        _not_enough_data_response(session_id, "summary")  # logs the skip
+        return ""
 
     prompt = f"""Summarize this AI tutoring session.
 
@@ -90,21 +91,6 @@ Under 200 words. Write for the student ("you learned...", "you should review..."
         max_tokens=500,
     )
     summary_text = response.choices[0].message.content or ""
-
-    # Find the artifact and update it
-    artifacts = await artifacts_db.list_artifacts(pool, session_id)
-    summary_artifact = next(
-        (a for a in artifacts if a["artifact_type"] == "summary"), None,
-    )
-    if summary_artifact:
-        await artifacts_db.update_content(
-            pool,
-            summary_artifact["id"],
-            content_json={"text": summary_text},
-            status="ready",
-        )
-    else:
-        logger.warning("summary_artifact_not_found", session_id=str(session_id))
 
     logger.info(
         "summary_generated",
@@ -165,14 +151,15 @@ Include ONLY content actually covered. Respond with valid JSON only."""
             session_id=str(session_id),
             raw_text=content_text[:200],
         )
-        # Mark artifact as error
+        # Mark pre-created artifact as error
         artifacts = await artifacts_db.list_artifacts(pool, session_id)
         cs_artifact = next(
             (a for a in artifacts if a["artifact_type"] == "cheat_sheet"), None,
         )
         if cs_artifact:
             await artifacts_db.update_content(
-                pool, cs_artifact["id"], content_json={"error": "Failed to parse LLM output"}, status="error",
+                pool, cs_artifact["id"],
+                content_json={"error": "Failed to parse LLM output"}, status="error",
             )
         return {"error": "Failed to parse LLM output"}
 
@@ -204,6 +191,7 @@ async def generate_worksheet(
     recent_turns = await sessions_db.get_recent_turns(
         pool, session_id, limit=artifact_context_turns,
     )
+    recent_turns.reverse()  # chronological order
     if _count_student_turns(recent_turns) < _MIN_STUDENT_TURNS:
         return _not_enough_data_response(session_id, "worksheet")
 
@@ -245,13 +233,15 @@ Mix: ~30% easy, ~50% medium, ~20% hard. Include LaTeX for math. Valid JSON only.
             session_id=str(session_id),
             raw_text=content_text[:200],
         )
+        # Mark pre-created artifact as error
         artifacts = await artifacts_db.list_artifacts(pool, session_id)
         ws_artifact = next(
             (a for a in artifacts if a["artifact_type"] == "worksheet"), None,
         )
         if ws_artifact:
             await artifacts_db.update_content(
-                pool, ws_artifact["id"], content_json={"error": "Failed to parse LLM output"}, status="error",
+                pool, ws_artifact["id"],
+                content_json={"error": "Failed to parse LLM output"}, status="error",
             )
         return {"error": "Failed to parse LLM output"}
 

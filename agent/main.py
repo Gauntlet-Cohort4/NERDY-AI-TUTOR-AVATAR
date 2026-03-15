@@ -18,6 +18,7 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
 from uuid import UUID
 
 import structlog
@@ -153,9 +154,18 @@ class _HealthHandler(BaseHTTPRequestHandler):
         pass
 
 
+class _ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    """HTTPServer that handles each request in a new thread.
+
+    Prevents long-running API requests (e.g. LLM-backed artifact generation)
+    from blocking health checks and other endpoints.
+    """
+    daemon_threads = True
+
+
 def _start_health_server() -> None:
     """Start the health check HTTP server in a daemon thread."""
-    server = HTTPServer(("0.0.0.0", HEALTH_PORT), _HealthHandler)
+    server = _ThreadedHTTPServer(("0.0.0.0", HEALTH_PORT), _HealthHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     logger.info("health_server_started", port=HEALTH_PORT)
@@ -279,6 +289,35 @@ async def _run_db_async(coro):
     if loop is None:
         raise RuntimeError("No DB event loop available")
     future = asyncio.run_coroutine_threadsafe(coro, loop)
+    return await asyncio.wrap_future(future)
+
+
+# ── Dedicated LLM event loop ─────────────────────────────────────────────────
+# Mirrors the DB loop pattern. Keeps long-running Groq API calls (2-5 s each)
+# off the DB loop so they don't block asyncpg writes at high concurrency.
+
+_llm_loop: asyncio.AbstractEventLoop | None = None
+_llm_thread: threading.Thread | None = None
+
+
+def _start_llm_loop() -> None:
+    """Create and start the dedicated LLM event loop in a daemon thread."""
+    global _llm_loop, _llm_thread
+    _llm_loop = asyncio.new_event_loop()
+    _llm_thread = threading.Thread(target=_llm_loop.run_forever, daemon=True)
+    _llm_thread.start()
+    logger.info("llm_event_loop_started")
+
+
+async def _run_llm_async(coro):
+    """Dispatch a coroutine to the LLM event loop and await the result.
+
+    Identical to _run_db_async but targets the dedicated LLM loop so that
+    long-running Groq API calls don't block database operations.
+    """
+    if _llm_loop is None:
+        raise RuntimeError("No LLM event loop available")
+    future = asyncio.run_coroutine_threadsafe(coro, _llm_loop)
     return await asyncio.wrap_future(future)
 
 
@@ -475,6 +514,9 @@ async def entrypoint(ctx) -> None:
         # Safe: no await between guard and flag — asyncio cooperative scheduling
         _session_ended = True
         try:
+            # Flush pending tracker writes before ending session
+            await tracker.flush()
+
             from src.db.sessions import end_session
 
             summary = tracker.summary if tracker.summary else None
@@ -482,6 +524,98 @@ async def entrypoint(ctx) -> None:
                 end_session(pool, db_session_id, summary_cache=summary),
             )
             logger.info("db_session_ended", db_session_id=str(db_session_id))
+
+            # Fire-and-forget artifact generation after session ends.
+            # Records are created only when we have data to populate them.
+            async def _generate_artifacts() -> None:
+                try:
+                    from src.artifacts.generator import (
+                        generate_cheat_sheet,
+                        generate_summary,
+                        generate_worksheet,
+                    )
+                    from src.db.artifacts import create_artifact
+
+                    # The generator functions run on the LLM loop but need
+                    # DB access internally.  Wrap the raw pool so asyncpg
+                    # calls are bridged back to the DB loop transparently.
+                    llm_pool = _CrossLoopPool(pool, db_loop)
+
+                    summary_text = await _run_llm_async(
+                        generate_summary(
+                            llm_pool,
+                            db_session_id,
+                            summary_cache=summary,
+                            groq_model=config.groq_model,
+                            artifact_context_turns=config.artifact_context_turns,
+                        ),
+                    )
+                    if not summary_text or not summary_text.strip():
+                        logger.warning(
+                            "artifacts_skipped_insufficient_data",
+                            db_session_id=str(db_session_id),
+                        )
+                        return
+
+                    # Create artifact records only when we have data.
+                    # Summary record is created first and populated here
+                    # (generate_summary only produces text, it doesn't
+                    # know whether the record exists yet).
+                    from src.db.artifacts import update_content
+
+                    summary_id = await _run_db_async(
+                        create_artifact(pool, db_session_id, "summary",
+                                        "Session Summary"),
+                    )
+                    await _run_db_async(
+                        update_content(pool, summary_id,
+                                       content_json={"text": summary_text},
+                                       status="ready"),
+                    )
+
+                    await _run_db_async(
+                        create_artifact(pool, db_session_id, "cheat_sheet",
+                                        f"Cheat Sheet: {subject_key}"),
+                    )
+                    await _run_db_async(
+                        create_artifact(pool, db_session_id, "worksheet",
+                                        f"Practice Worksheet: {subject_key}"),
+                    )
+
+                    await _run_llm_async(
+                        generate_cheat_sheet(
+                            llm_pool,
+                            db_session_id,
+                            summary_text,
+                            subject_key,
+                            grade or 7,
+                            groq_model=config.groq_model,
+                            artifact_context_turns=config.artifact_context_turns,
+                        ),
+                    )
+                    await _run_llm_async(
+                        generate_worksheet(
+                            llm_pool,
+                            db_session_id,
+                            summary_text,
+                            subject_key,
+                            grade or 7,
+                            groq_model=config.groq_model,
+                            artifact_context_turns=config.artifact_context_turns,
+                        ),
+                    )
+                    logger.info(
+                        "artifacts_generated",
+                        db_session_id=str(db_session_id),
+                    )
+                except Exception:
+                    logger.warning("artifact_generation_failed", exc_info=True)
+
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(_generate_artifacts())
+            except RuntimeError:
+                logger.warning("no_event_loop_for_artifact_generation")
         except Exception:
             logger.warning("db_session_end_failed", exc_info=True)
 
@@ -580,6 +714,9 @@ if __name__ == "__main__":
         _loop_thread.start()
 
         logger.info("database_initialized_for_api")
+
+    # Start dedicated LLM event loop — keeps Groq API calls off the DB loop
+    _start_llm_loop()
 
     _start_health_server()
     logger.info("agent_server_starting")

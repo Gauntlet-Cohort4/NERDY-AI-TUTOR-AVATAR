@@ -346,13 +346,13 @@ export default function ReviewsPage() {
               background: "linear-gradient(135deg, #007AFF, #0056b3)",
             }}
           >
-            N
+            L
           </div>
           <span
             className="text-white font-bold text-lg"
             style={{ letterSpacing: "-0.02em" }}
           >
-            Nerdy AI Tutor
+            LUNA Tutor
           </span>
         </button>
         <span className="text-white/60 text-sm">All Reviews</span>

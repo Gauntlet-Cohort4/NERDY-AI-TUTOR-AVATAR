@@ -34,11 +34,16 @@ class AppConfig:
     deepgram_model: str = "nova-3"
     deepgram_language: str = "en-US"
 
-    # Groq
+    # Groq (real-time tutoring LLM)
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
     groq_temperature: float = 0.7
     groq_max_tokens: int = 150
+
+    # Artifact generation LLM (summaries, worksheets, cheat sheets, flash cards)
+    artifact_llm_provider: str = "anthropic"  # "anthropic" or "groq"
+    artifact_llm_model: str = ""  # resolved from provider if empty
+    anthropic_api_key: str = ""
 
     # Cartesia
     cartesia_api_key: str = ""
@@ -52,7 +57,6 @@ class AppConfig:
     simli_api_key: str = ""
     simli_face_id: str = ""
     simli_max_session_length: int = 3600
-    simli_max_idle_time: int = 300
 
     # Hedra (reads HEDRA_API_KEY from env automatically)
     hedra_api_key: str = ""
@@ -61,6 +65,9 @@ class AppConfig:
     # Beyond Presence
     bey_api_key: str = ""
     bey_avatar_id: str = ""
+
+    # Session
+    session_idle_timeout: int = 180  # 3 minutes — disconnect room after no activity
 
     # Application
     log_level: str = "INFO"
@@ -119,6 +126,9 @@ class AppConfig:
             deepgram_model=os.getenv("DEEPGRAM_MODEL", "nova-3"),
             groq_api_key=os.environ["GROQ_API_KEY"],
             groq_model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+            artifact_llm_provider=os.getenv("ARTIFACT_LLM_PROVIDER", "anthropic").lower(),
+            artifact_llm_model=os.getenv("ARTIFACT_LLM_MODEL", ""),
+            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
             cartesia_api_key=os.environ["CARTESIA_API_KEY"],
             cartesia_model=os.getenv("CARTESIA_MODEL", "sonic-3"),
             cartesia_voice_id=os.getenv(
@@ -140,7 +150,27 @@ class AppConfig:
             image_gen_provider=os.getenv("IMAGE_GEN_PROVIDER", "none"),
             image_gen_api_key=os.getenv("IMAGE_GEN_API_KEY", ""),
             image_gen_model=os.getenv("IMAGE_GEN_MODEL", ""),
+            session_idle_timeout=int(os.getenv("SESSION_IDLE_TIMEOUT", "180")),
         )
+
+        # Resolve artifact LLM model default from provider if not set
+        if not config.artifact_llm_model:
+            _defaults = {
+                "anthropic": "claude-sonnet-4-5-20250929",
+                "groq": config.groq_model,
+            }
+            config.artifact_llm_model = _defaults.get(
+                config.artifact_llm_provider, config.groq_model,
+            )
+
+        # Fall back to groq if anthropic is selected but no key is set
+        if config.artifact_llm_provider == "anthropic" and not config.anthropic_api_key:
+            logger.warning(
+                "anthropic_api_key_missing",
+                msg="ARTIFACT_LLM_PROVIDER=anthropic but no ANTHROPIC_API_KEY — falling back to groq",
+            )
+            config.artifact_llm_provider = "groq"
+            config.artifact_llm_model = config.groq_model
 
         if config.database_url is None:
             logger.warning(
@@ -152,6 +182,7 @@ class AppConfig:
             "config_loaded",
             livekit_url=config.livekit_url,
             groq_model=config.groq_model,
+            artifact_llm=f"{config.artifact_llm_provider}/{config.artifact_llm_model}",
             avatar_provider=config.avatar_provider,
             database_configured=config.database_url is not None,
         )

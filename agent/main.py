@@ -418,12 +418,21 @@ async def entrypoint(ctx) -> None:
             activation_threshold=0.65,
             min_speech_duration=0.1,
         ),
+        min_endpointing_delay=0.8,  # Prevent last-word cutoff (default 0.5 too aggressive)
     )
 
     session.on("metrics_collected", metrics.on_metrics)
 
+    _consecutive_errors = 0
+    _MAX_CONSECUTIVE_ERRORS = 3
+
     def _on_session_error(error_event) -> None:
-        """Handle session-level errors via the pipeline error handler."""
+        """Handle session-level errors via the pipeline error handler.
+
+        After _MAX_CONSECUTIVE_ERRORS consecutive errors (e.g. LLM timeouts),
+        disconnect the room so the frontend redirects the student to the dashboard.
+        """
+        nonlocal _consecutive_errors
         raw_error = error_event.error
         pipeline_error = PipelineError(
             stage=PipelineStage.SESSION,
@@ -433,7 +442,78 @@ async def entrypoint(ctx) -> None:
         )
         handle_pipeline_error(pipeline_error)
 
+        _consecutive_errors += 1
+        logger.warning(
+            "session_error_count",
+            count=_consecutive_errors,
+            max=_MAX_CONSECUTIVE_ERRORS,
+            error=str(raw_error)[:200],
+        )
+        if _consecutive_errors >= _MAX_CONSECUTIVE_ERRORS:
+            logger.error(
+                "session_auto_disconnect",
+                reason="too_many_consecutive_errors",
+                count=_consecutive_errors,
+            )
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(_end_db_session())
+                loop.create_task(ctx.room.disconnect())
+            except RuntimeError:
+                pass
+
     session.on("error", _on_session_error)
+
+    # Reset error counter on successful agent speech (proves the pipeline recovered)
+    def _on_agent_speech(*_args) -> None:
+        nonlocal _consecutive_errors
+        if _consecutive_errors > 0:
+            logger.debug("error_counter_reset", previous=_consecutive_errors)
+            _consecutive_errors = 0
+
+    session.on("agent_speech_committed", _on_agent_speech)
+
+    # ── Provider-agnostic idle timeout ────────────────────────────────────
+    # Disconnect the room after config.session_idle_timeout seconds of no
+    # activity (no user speech AND no agent speech).  Works regardless of
+    # avatar provider (Simli, Hedra, Beyond Presence).
+    _idle_handle: asyncio.TimerHandle | None = None
+
+    def _schedule_idle_disconnect() -> None:
+        nonlocal _idle_handle
+        # Cancel any existing timer
+        if _idle_handle is not None:
+            _idle_handle.cancel()
+        try:
+            loop = asyncio.get_running_loop()
+            _idle_handle = loop.call_later(
+                config.session_idle_timeout,
+                lambda: loop.create_task(_idle_disconnect()),
+            )
+        except RuntimeError:
+            logger.warning("idle_timer_schedule_failed_no_loop")
+
+    async def _idle_disconnect() -> None:
+        logger.warning(
+            "session_idle_disconnect",
+            timeout_seconds=config.session_idle_timeout,
+        )
+        await _end_db_session()
+        await ctx.room.disconnect()
+
+    # Reset idle timer and error counter on any activity (user or agent speech)
+    def _on_activity(*_args) -> None:
+        nonlocal _consecutive_errors
+        if _consecutive_errors > 0:
+            logger.debug("error_counter_reset_on_activity", previous=_consecutive_errors)
+            _consecutive_errors = 0
+        _schedule_idle_disconnect()
+
+    session.on("agent_speech_committed", _on_activity)
+    session.on("conversation_item_added", _on_activity)
+
+    # Start the initial idle timer once the session begins
+    _schedule_idle_disconnect()
 
     # Conversation tracker — hooks session events for background summarization
     history = ConversationHistory(
@@ -546,7 +626,8 @@ async def entrypoint(ctx) -> None:
                             llm_pool,
                             db_session_id,
                             summary_cache=summary,
-                            groq_model=config.groq_model,
+                            artifact_llm_provider=config.artifact_llm_provider,
+                            artifact_llm_model=config.artifact_llm_model,
                             artifact_context_turns=config.artifact_context_turns,
                         ),
                     )
@@ -589,7 +670,8 @@ async def entrypoint(ctx) -> None:
                             summary_text,
                             subject_key,
                             grade or 7,
-                            groq_model=config.groq_model,
+                            artifact_llm_provider=config.artifact_llm_provider,
+                            artifact_llm_model=config.artifact_llm_model,
                             artifact_context_turns=config.artifact_context_turns,
                         ),
                     )
@@ -600,7 +682,8 @@ async def entrypoint(ctx) -> None:
                             summary_text,
                             subject_key,
                             grade or 7,
-                            groq_model=config.groq_model,
+                            artifact_llm_provider=config.artifact_llm_provider,
+                            artifact_llm_model=config.artifact_llm_model,
                             artifact_context_turns=config.artifact_context_turns,
                         ),
                     )
@@ -635,6 +718,10 @@ async def entrypoint(ctx) -> None:
 
     @ctx.room.on("disconnected")
     def _on_room_disconnected() -> None:
+        nonlocal _idle_handle
+        if _idle_handle is not None:
+            _idle_handle.cancel()
+            _idle_handle = None
         try:
             loop = asyncio.get_running_loop()
             loop.create_task(_end_db_session())

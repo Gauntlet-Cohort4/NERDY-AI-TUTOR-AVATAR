@@ -304,7 +304,8 @@ def _handle_generate_flash_cards(
                 pool,
                 session_id=session_id,
                 user_id=user_id,
-                groq_model=config.groq_model,
+                artifact_llm_provider=config.artifact_llm_provider,
+                artifact_llm_model=config.artifact_llm_model,
                 artifact_context_turns=config.artifact_context_turns,
             ),
         )

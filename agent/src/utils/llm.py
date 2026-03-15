@@ -1,4 +1,4 @@
-"""Shared LLM utilities: JSON extraction and Groq client singleton.
+"""Shared LLM utilities: JSON extraction, Groq and Anthropic client singletons.
 
 Centralises helpers that were previously duplicated across
 processor.py, chat.py, and generator.py.
@@ -12,8 +12,9 @@ from typing import Any
 
 from groq import AsyncGroq
 
-# Module-level singleton — reused across calls to avoid repeated instantiation.
+# Module-level singletons — reused across calls to avoid repeated instantiation.
 _groq_client: AsyncGroq | None = None
+_anthropic_client: object | None = None
 
 
 def extract_json(text: str) -> dict[str, Any]:
@@ -32,3 +33,23 @@ def get_groq_client() -> AsyncGroq:
     if _groq_client is None:
         _groq_client = AsyncGroq()
     return _groq_client
+
+
+def get_anthropic_client():
+    """Return a shared AsyncAnthropic client (reads ANTHROPIC_API_KEY from env).
+
+    Returns None if the anthropic package is not installed or no key is set.
+    """
+    global _anthropic_client
+    if _anthropic_client is None:
+        try:
+            import os
+
+            from anthropic import AsyncAnthropic
+
+            if not os.getenv("ANTHROPIC_API_KEY"):
+                return None
+            _anthropic_client = AsyncAnthropic()
+        except ImportError:
+            return None
+    return _anthropic_client

@@ -28,6 +28,10 @@ class SimliAvatarAdapter:
 
     Wraps the Simli LiveKit plugin to render a talking-head avatar
     driven by TTS audio output from the pipeline.
+
+    max_idle_time is intentionally omitted: room-level idle timeout
+    (session_idle_timeout, default 180s) handles disconnection for all
+    avatar providers uniformly.
     """
 
     def __init__(
@@ -35,12 +39,10 @@ class SimliAvatarAdapter:
         api_key: str,
         face_id: str,
         max_session_length: int = 600,
-        max_idle_time: int = 30,
     ):
         self._api_key = api_key
         self._face_id = face_id
         self._max_session_length = max_session_length
-        self._max_idle_time = max_idle_time
         self._session: Optional[object] = None
 
     async def start(self, session, room) -> None:
@@ -52,7 +54,6 @@ class SimliAvatarAdapter:
                 api_key=self._api_key,
                 face_id=self._face_id,
                 max_session_length=self._max_session_length,
-                max_idle_time=self._max_idle_time,
             )
             self._session = AvatarSession(simli_config=simli_config)
             await self._session.start(session, room=room)
@@ -218,7 +219,6 @@ def create_avatar(
             api_key=config.simli_api_key,
             face_id=config.simli_face_id,
             max_session_length=config.simli_max_session_length,
-            max_idle_time=config.simli_max_idle_time,
         )
 
     if provider == "hedra":

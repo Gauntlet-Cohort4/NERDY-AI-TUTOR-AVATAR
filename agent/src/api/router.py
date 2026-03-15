@@ -603,7 +603,8 @@ def _handle_review_quiz(
             generate_review_quiz(
                 pool,
                 session_id,
-                groq_model=config.groq_model,
+                artifact_llm_provider=config.artifact_llm_provider,
+                artifact_llm_model=config.artifact_llm_model,
                 artifact_context_turns=config.artifact_context_turns,
             ),
         )
@@ -641,7 +642,8 @@ def _handle_generate_summary(
             generate_summary(
                 pool, session_id,
                 summary_cache=session.get("summary_cache"),
-                groq_model=config.groq_model,
+                artifact_llm_provider=config.artifact_llm_provider,
+                artifact_llm_model=config.artifact_llm_model,
                 artifact_context_turns=config.artifact_context_turns,
             ),
         )
@@ -697,7 +699,8 @@ def _handle_generate_worksheet(
                 generate_summary(
                     pool, session_id,
                     summary_cache=session.get("summary_cache"),
-                    groq_model=config.groq_model,
+                    artifact_llm_provider=config.artifact_llm_provider,
+                    artifact_llm_model=config.artifact_llm_model,
                     artifact_context_turns=config.artifact_context_turns,
                 ),
             )
@@ -707,7 +710,8 @@ def _handle_generate_worksheet(
         worksheet = _run_async(
             generate_worksheet(
                 pool, session_id, summary_text, subject, grade,
-                groq_model=config.groq_model,
+                artifact_llm_provider=config.artifact_llm_provider,
+                artifact_llm_model=config.artifact_llm_model,
                 artifact_context_turns=config.artifact_context_turns,
             ),
         )
@@ -761,7 +765,8 @@ def _handle_generate_cheat_sheet(
                 generate_summary(
                     pool, session_id,
                     summary_cache=session.get("summary_cache"),
-                    groq_model=config.groq_model,
+                    artifact_llm_provider=config.artifact_llm_provider,
+                    artifact_llm_model=config.artifact_llm_model,
                     artifact_context_turns=config.artifact_context_turns,
                 ),
             )
@@ -771,7 +776,8 @@ def _handle_generate_cheat_sheet(
         cheat_sheet = _run_async(
             generate_cheat_sheet(
                 pool, session_id, summary_text, subject, grade,
-                groq_model=config.groq_model,
+                artifact_llm_provider=config.artifact_llm_provider,
+                artifact_llm_model=config.artifact_llm_model,
                 artifact_context_turns=config.artifact_context_turns,
             ),
         )
@@ -797,7 +803,8 @@ def _handle_review_quiz_stream(
             generate_review_quiz(
                 pool,
                 session_id=session_id,
-                groq_model=config.groq_model,
+                artifact_llm_provider=config.artifact_llm_provider,
+                artifact_llm_model=config.artifact_llm_model,
                 artifact_context_turns=config.artifact_context_turns,
             ),
         )

@@ -203,21 +203,6 @@ function getSubjectsForGrade(gradeId: string): readonly SubjectConfig[] {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function LiveIndicator() {
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
-      style={{ background: "rgba(40,167,69,0.1)", color: "#28A745" }}
-    >
-      <span
-        className="inline-block w-[7px] h-[7px] rounded-full"
-        style={{ background: "#28A745", animation: "pulse-dot 1.5s infinite" }}
-      />
-      AI Ready
-    </span>
-  );
-}
-
 function Navbar() {
   const router = useRouter();
 
@@ -235,10 +220,10 @@ function Navbar() {
           className="flex items-center justify-center w-9 h-9 rounded-[10px] text-white text-base font-extrabold"
           style={{ background: "linear-gradient(135deg, #007AFF, #0056b3)" }}
         >
-          N
+          L
         </div>
         <span className="text-white font-bold text-lg" style={{ letterSpacing: "-0.02em" }}>
-          Nerdy AI Tutor
+          LUNA Tutor
         </span>
       </div>
       <div className="flex items-center gap-4">
@@ -296,9 +281,6 @@ function HeroSection() {
       />
 
       <div className="relative z-10">
-        <div className="mb-5">
-          <LiveIndicator />
-        </div>
         <h1
           className="text-white font-extrabold mb-5"
           style={{ fontSize: "clamp(2.4rem, 5vw, 3.6rem)", letterSpacing: "-0.03em", lineHeight: 1.1 }}
@@ -480,7 +462,7 @@ function Footer() {
       style={{ borderTop: "1px solid rgba(255,255,255,0.06)", padding: "24px 40px" }}
     >
       <span className="text-[13px]" style={{ color: "#3d506a" }}>
-        Nerdy AI Tutor
+        LUNA Tutor
       </span>
       <div className="flex gap-5">
         {(["Terms", "Privacy", "Help"] as const).map((link) => (

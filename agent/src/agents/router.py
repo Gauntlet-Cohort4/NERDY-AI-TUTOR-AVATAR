@@ -78,7 +78,7 @@ class SubjectRouterAgent(Agent):
             agent_class = getattr(module, class_name)
             logger.info(log_event)
             ctx.session.update_agent(agent_class(grade=self._grade))
-            return f"Switching you to our {display} tutor now!"
+            return ""  # New agent's on_enter() handles the greeting
 
         logger.warning("unknown_subject_requested", subject=subject)
         available = ", ".join(r[3] for r in _SUBJECT_ROUTES.values())

@@ -316,10 +316,10 @@ export default function WorksheetPage() {
             className="flex items-center justify-center w-9 h-9 rounded-[10px] text-white text-base font-extrabold"
             style={{ background: "linear-gradient(135deg, #007AFF, #0056b3)" }}
           >
-            N
+            L
           </div>
           <span className="text-white font-bold text-lg" style={{ letterSpacing: "-0.02em" }}>
-            Nerdy AI Tutor
+            LUNA Tutor
           </span>
         </button>
         {!loading && !error && (

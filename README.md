@@ -1,6 +1,6 @@
-# Nerdy Live AI Video Tutor
+# L.U.N.A. — Learning Unbound Nerdy AI
 
-A real-time AI video avatar tutor that uses Socratic teaching methods to help students learn biology, math, and physics through natural conversation with an animated avatar.
+A real-time AI video avatar tutor that uses Socratic teaching methods to help students learn biology, math, physics, and more through natural conversation with an animated avatar.
 
 All five implementation phases are complete. The system is fully wired end-to-end: LiveKit WebRTC transport, Deepgram STT, Groq LLM with Socratic subject agents, Cartesia TTS, Simli avatar rendering, and a Next.js 14 frontend.
 

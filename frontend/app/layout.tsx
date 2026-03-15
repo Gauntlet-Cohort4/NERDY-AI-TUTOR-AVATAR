@@ -9,7 +9,7 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Nerdy AI Tutor",
+  title: "LUNA Tutor",
   description: "Real-time AI video avatar tutor for interactive learning",
 };
 

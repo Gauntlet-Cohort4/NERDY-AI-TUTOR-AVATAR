@@ -78,8 +78,8 @@ class SubjectTutorAgent(Agent):
         """
         payload = {"type": "equation", "latex": latex, "title": title}
         if not await self._publish_whiteboard(payload):
-            return "Failed to publish equation to whiteboard."
-        return f"Equation displayed: {title or latex[:40]}"
+            logger.warning("whiteboard_equation_failed", latex=latex[:40])
+        return ""
 
     @function_tool
     async def show_diagram(
@@ -110,8 +110,8 @@ class SubjectTutorAgent(Agent):
             "alt_text": (asset.get("metadata") or {}).get("alt_text", ""),
         }
         if not await self._publish_whiteboard(payload):
-            return "Failed to publish diagram to whiteboard."
-        return f"Diagram displayed: {asset['title']}"
+            logger.warning("whiteboard_diagram_failed", topic_key=topic_key)
+        return ""
 
     @function_tool
     async def show_interactive(
@@ -138,8 +138,8 @@ class SubjectTutorAgent(Agent):
             "params": parsed_params,
         }
         if not await self._publish_whiteboard(payload):
-            return "Failed to publish interactive diagram to whiteboard."
-        return f"Interactive diagram displayed: {template_id}"
+            logger.warning("whiteboard_interactive_failed", template_id=template_id)
+        return ""
 
     @function_tool
     async def generate_visual(
@@ -178,7 +178,7 @@ class SubjectTutorAgent(Agent):
             "message": "Image generation not yet configured",
             "title": title,
         })
-        return "Image generation is not yet configured. The whiteboard has been updated."
+        return ""
 
     # ------------------------------------------------------------------
     # Internal helpers

@@ -2,6 +2,9 @@
 
 All generators read from the database (summary_cache + recent turns),
 NOT from in-memory ConversationHistory which may only hold a rolling window.
+
+Uses Claude Sonnet (via Anthropic API) for higher-quality artifact generation.
+Falls back to Groq/Llama if ANTHROPIC_API_KEY is not set.
 """
 
 from __future__ import annotations
@@ -14,12 +17,43 @@ import structlog
 from src.db import artifacts as artifacts_db
 from src.db import flash_cards as flash_cards_db
 from src.db import sessions as sessions_db
-from src.utils.llm import extract_json, get_groq_client
+from src.utils.llm import extract_json, get_anthropic_client, get_groq_client
 
 logger = structlog.get_logger(__name__)
 
 
 _MAX_TURN_CHARS = 500
+
+
+async def _llm_generate(prompt: str, provider: str, model: str, max_tokens: int) -> str:
+    """Call the configured artifact LLM provider.
+
+    Supports "anthropic" and "groq". Falls back to Groq on Anthropic failure.
+    """
+    if provider == "anthropic":
+        anthropic = get_anthropic_client()
+        if anthropic is not None:
+            try:
+                response = await anthropic.messages.create(
+                    model=model,
+                    max_tokens=max_tokens,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                logger.debug("artifact_llm_call", provider="anthropic", model=model)
+                return response.content[0].text
+            except Exception:
+                logger.warning("anthropic_artifact_failed_falling_back_to_groq", exc_info=True)
+        # Fall through to groq
+
+    client = get_groq_client()
+    groq_model = model if provider == "groq" else "llama-3.3-70b-versatile"
+    response = await client.chat.completions.create(
+        model=groq_model,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=max_tokens,
+    )
+    logger.debug("artifact_llm_call", provider="groq", model=groq_model)
+    return response.choices[0].message.content or ""
 
 # Minimum student (user) turns required before artifact generation is useful.
 _MIN_STUDENT_TURNS = 2
@@ -56,7 +90,8 @@ async def generate_summary(
     pool,
     session_id,
     summary_cache: str | None,
-    groq_model: str,
+    artifact_llm_provider: str = "anthropic",
+    artifact_llm_model: str = "claude-sonnet-4-5-20250929",
     artifact_context_turns: int = 20,
 ) -> str:
     """Generate a session summary from summary_cache + recent turns."""
@@ -84,13 +119,7 @@ Produce:
 
 Under 200 words. Write for the student ("you learned...", "you should review...")."""
 
-    client = get_groq_client()
-    response = await client.chat.completions.create(
-        model=groq_model,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=500,
-    )
-    summary_text = response.choices[0].message.content or ""
+    summary_text = await _llm_generate(prompt, artifact_llm_provider, artifact_llm_model, max_tokens=500)
 
     logger.info(
         "summary_generated",
@@ -106,7 +135,8 @@ async def generate_cheat_sheet(
     summary: str,
     subject: str,
     grade: int,
-    groq_model: str,
+    artifact_llm_provider: str = "anthropic",
+    artifact_llm_model: str = "claude-sonnet-4-5-20250929",
     artifact_context_turns: int = 20,
 ) -> dict[str, Any]:
     """Generate a structured cheat sheet from session content."""
@@ -136,13 +166,7 @@ Format as JSON:
 
 Include ONLY content actually covered. Respond with valid JSON only."""
 
-    client = get_groq_client()
-    response = await client.chat.completions.create(
-        model=groq_model,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=1000,
-    )
-    content_text = response.choices[0].message.content or "{}"
+    content_text = await _llm_generate(prompt, artifact_llm_provider, artifact_llm_model, max_tokens=1000)
     try:
         content_json: dict[str, Any] = extract_json(content_text)
     except (json.JSONDecodeError, ValueError):
@@ -184,7 +208,8 @@ async def generate_worksheet(
     summary: str,
     subject: str,
     grade: int,
-    groq_model: str,
+    artifact_llm_provider: str = "anthropic",
+    artifact_llm_model: str = "claude-sonnet-4-5-20250929",
     artifact_context_turns: int = 20,
 ) -> dict[str, Any]:
     """Generate a practice worksheet with 8-12 problems."""
@@ -218,13 +243,7 @@ Create 8-12 problems. Format as JSON:
 
 Mix: ~30% easy, ~50% medium, ~20% hard. Include LaTeX for math. Valid JSON only."""
 
-    client = get_groq_client()
-    response = await client.chat.completions.create(
-        model=groq_model,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=2000,
-    )
-    content_text = response.choices[0].message.content or "{}"
+    content_text = await _llm_generate(prompt, artifact_llm_provider, artifact_llm_model, max_tokens=2000)
     try:
         content_json: dict[str, Any] = extract_json(content_text)
     except (json.JSONDecodeError, ValueError):
@@ -263,7 +282,8 @@ Mix: ~30% easy, ~50% medium, ~20% hard. Include LaTeX for math. Valid JSON only.
 async def generate_review_quiz(
     pool,
     session_id,
-    groq_model: str,
+    artifact_llm_provider: str = "anthropic",
+    artifact_llm_model: str = "claude-sonnet-4-5-20250929",
     artifact_context_turns: int = 20,
 ) -> dict[str, Any]:
     """Generate an on-demand review quiz from a past session."""
@@ -303,13 +323,7 @@ Create 8-12 questions. Format as JSON:
 
 Mix difficulty. Valid JSON only."""
 
-    client = get_groq_client()
-    response = await client.chat.completions.create(
-        model=groq_model,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=2000,
-    )
-    content_text = response.choices[0].message.content or "{}"
+    content_text = await _llm_generate(prompt, artifact_llm_provider, artifact_llm_model, max_tokens=2000)
     try:
         content_json: dict[str, Any] = extract_json(content_text)
     except (json.JSONDecodeError, ValueError):
@@ -346,7 +360,8 @@ async def generate_flash_cards(
     pool,
     session_id,
     user_id,
-    groq_model: str,
+    artifact_llm_provider: str = "anthropic",
+    artifact_llm_model: str = "claude-sonnet-4-5-20250929",
     artifact_context_turns: int = 20,
 ) -> list[dict[str, Any]]:
     """Generate flash cards from recent session transcript turns.
@@ -393,13 +408,7 @@ Rules:
 - Each example should be specific and helpful for studying
 - Respond with valid JSON only"""
 
-    client = get_groq_client()
-    response = await client.chat.completions.create(
-        model=groq_model,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=1500,
-    )
-    content_text = response.choices[0].message.content or "{}"
+    content_text = await _llm_generate(prompt, artifact_llm_provider, artifact_llm_model, max_tokens=1500)
 
     try:
         content_json: dict[str, Any] = extract_json(content_text)

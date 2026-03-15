@@ -358,8 +358,10 @@ async def entrypoint(ctx) -> None:
     tts = cartesia.TTS(
         model=config.cartesia_model,
         voice=config.cartesia_voice_id,
-        speed=0.9,  # sonic-3 requires float 0.6–2.0; 1.0 = normal
-        text_pacing=True,
+        speed=1.0,
+        # text_pacing disabled: Cartesia plugin's EOS packet sends only " "
+        # with continue=False, which clips the final word when pacing buffers it.
+        # See: https://github.com/livekit/agents/issues/4171
     )
 
     # Avatar — provider selected by AVATAR_PROVIDER env var

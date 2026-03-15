@@ -41,12 +41,14 @@ class TestBiologyTutorAgent:
     def test_instructions_match_system_prompt(self):
         from src.agents.biology import BiologyTutorAgent
         from src.education.prompts import get_system_prompt
+        from src.visuals.templates import get_templates_for_subject
 
         agent = BiologyTutorAgent()
         instructions = str(
             getattr(agent, "_instructions", "") or getattr(agent, "instructions", "")
         )
-        expected = get_system_prompt(Subject.BIOLOGY)
+        templates = list(get_templates_for_subject("biology"))
+        expected = get_system_prompt(Subject.BIOLOGY, available_templates=templates)
         assert instructions == expected
 
     def test_instructions_contain_photosynthesis_reference(self):
@@ -87,12 +89,14 @@ class TestMathTutorAgent:
     def test_instructions_match_system_prompt(self):
         from src.agents.math import MathTutorAgent
         from src.education.prompts import get_system_prompt
+        from src.visuals.templates import get_templates_for_subject
 
         agent = MathTutorAgent()
         instructions = str(
             getattr(agent, "_instructions", "") or getattr(agent, "instructions", "")
         )
-        expected = get_system_prompt(Subject.MATH)
+        templates = list(get_templates_for_subject("math"))
+        expected = get_system_prompt(Subject.MATH, available_templates=templates)
         assert instructions == expected
 
     def test_instructions_contain_fraction_reference(self):
@@ -133,12 +137,14 @@ class TestPhysicsTutorAgent:
     def test_instructions_match_system_prompt(self):
         from src.agents.physics import PhysicsTutorAgent
         from src.education.prompts import get_system_prompt
+        from src.visuals.templates import get_templates_for_subject
 
         agent = PhysicsTutorAgent()
         instructions = str(
             getattr(agent, "_instructions", "") or getattr(agent, "instructions", "")
         )
-        expected = get_system_prompt(Subject.PHYSICS)
+        templates = list(get_templates_for_subject("physics"))
+        expected = get_system_prompt(Subject.PHYSICS, available_templates=templates)
         assert instructions == expected
 
     def test_instructions_contain_newton_reference(self):

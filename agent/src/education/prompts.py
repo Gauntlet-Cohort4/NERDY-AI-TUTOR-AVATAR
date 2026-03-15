@@ -414,8 +414,12 @@ def get_visual_instructions(
     templates_list = ", ".join(available_templates) if available_templates else "none available"
 
     return (
-        "\n\nYou have whiteboard tools available. Use them via function calls — "
-        "never write tool syntax in your text responses.\n\n"
+        "\n\nYou have whiteboard tools available. "
+        "CRITICAL: Tools are invoked automatically by the system when you make a "
+        "function call. NEVER write <function>, </function>, or any XML/JSON tool "
+        "syntax in your spoken text. If you want to show an equation, just make the "
+        "function call — do NOT type it out. Your text response must contain ONLY "
+        "natural speech to the student.\n\n"
         f"Available diagram topics: {topics_list}\n"
         f"Available interactive templates: {templates_list}\n\n"
         "Visual guidelines:\n"

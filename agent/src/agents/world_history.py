@@ -6,6 +6,7 @@ from src.agents.base import SubjectTutorAgent
 from src.education.prompts import get_system_prompt
 from src.education.subjects import SUBJECT_CONFIGS
 from src.types import Subject
+from src.visuals.templates import get_templates_for_subject
 
 logger = structlog.get_logger(__name__)
 
@@ -17,7 +18,10 @@ class WorldHistoryTutorAgent(SubjectTutorAgent):
 
     def __init__(self, grade: int | None = None) -> None:
         subject_config = SUBJECT_CONFIGS[Subject.WORLD_HISTORY]
-        super().__init__(instructions=get_system_prompt(Subject.WORLD_HISTORY, grade=grade))
+        templates = list(get_templates_for_subject("world_history"))
+        super().__init__(instructions=get_system_prompt(
+            Subject.WORLD_HISTORY, grade=grade, available_templates=templates,
+        ))
         self._grade = grade
         logger.debug(
             "world_history_agent_created",

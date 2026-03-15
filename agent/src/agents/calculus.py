@@ -6,6 +6,7 @@ from src.agents.base import SubjectTutorAgent
 from src.education.prompts import get_system_prompt
 from src.education.subjects import SUBJECT_CONFIGS
 from src.types import Subject
+from src.visuals.templates import get_templates_for_subject
 
 logger = structlog.get_logger(__name__)
 
@@ -17,7 +18,10 @@ class CalculusTutorAgent(SubjectTutorAgent):
 
     def __init__(self, grade: int | None = None) -> None:
         subject_config = SUBJECT_CONFIGS[Subject.CALCULUS]
-        super().__init__(instructions=get_system_prompt(Subject.CALCULUS, grade=grade))
+        templates = list(get_templates_for_subject("calculus"))
+        super().__init__(instructions=get_system_prompt(
+            Subject.CALCULUS, grade=grade, available_templates=templates,
+        ))
         self._grade = grade
         logger.debug(
             "calculus_agent_created",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Image from "next/image";
 import DOMPurify from "dompurify";
 
 interface DiagramViewerProps {
@@ -47,10 +48,13 @@ export default function DiagramViewer({ content, title, altText, type }: Diagram
             dangerouslySetInnerHTML={{ __html: safeSvg }}
           />
         ) : (
-          <img
+          <Image
             src={content}
             alt={altText || title || "Educational diagram"}
+            width={672}
+            height={384}
             className="max-w-2xl max-h-96 rounded-lg object-contain"
+            unoptimized
           />
         )}
       </div>

@@ -34,14 +34,16 @@ class TestConfigFailsFast:
     def test_config_fails_on_multiple_missing_vars(self, monkeypatch):
         monkeypatch.setenv("LIVEKIT_URL", "wss://test.livekit.cloud")
         monkeypatch.setenv("LIVEKIT_API_KEY", "test")
+        monkeypatch.setenv("AVATAR_PROVIDER", "simli")
         # Missing: LIVEKIT_API_SECRET, DEEPGRAM_API_KEY, GROQ_API_KEY,
-        # CARTESIA_API_KEY, SIMLI_API_KEY
+        # CARTESIA_API_KEY, SIMLI_API_KEY, SIMLI_FACE_ID
         missing_keys = [
             "LIVEKIT_API_SECRET",
             "DEEPGRAM_API_KEY",
             "GROQ_API_KEY",
             "CARTESIA_API_KEY",
             "SIMLI_API_KEY",
+            "SIMLI_FACE_ID",
         ]
         for key in missing_keys:
             monkeypatch.delenv(key, raising=False)
@@ -50,6 +52,18 @@ class TestConfigFailsFast:
         error_msg = str(exc_info.value)
         for key in missing_keys:
             assert key in error_msg
+
+    def test_config_fails_on_unknown_avatar_provider(self, mock_env_vars, monkeypatch):
+        monkeypatch.setenv("AVATAR_PROVIDER", "unknown")
+        with pytest.raises(EnvironmentError, match="Unknown AVATAR_PROVIDER"):
+            AppConfig.from_env()
+
+    def test_config_hedra_provider_requires_hedra_keys(self, mock_env_vars, monkeypatch):
+        monkeypatch.setenv("AVATAR_PROVIDER", "hedra")
+        monkeypatch.delenv("HEDRA_API_KEY", raising=False)
+        monkeypatch.delenv("HEDRA_AVATAR_ID", raising=False)
+        with pytest.raises(EnvironmentError, match="HEDRA_API_KEY"):
+            AppConfig.from_env()
 
 
 class TestConfigDefaults:

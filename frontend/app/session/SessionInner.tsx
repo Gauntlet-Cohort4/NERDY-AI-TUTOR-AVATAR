@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { useConnectionState, useDataChannel, useTranscriptions } from "@livekit/components-react";
+import { useConnectionState, useDataChannel, useRoomContext, useTranscriptions } from "@livekit/components-react";
 import { ConnectionState as LKConnectionState } from "livekit-client";
 import { mapConnectionState, parseMetricsMessage, parseWhiteboardPayload } from "@/lib/livekit";
 import { createLogger } from "@/lib/logger";
@@ -16,6 +16,7 @@ interface SessionInnerProps {
   onMetricsUpdate: (metrics: TurnMetrics) => void;
   onTranscriptUpdate: (entry: TranscriptEntry) => void;
   onWhiteboardUpdate: (payload: WhiteboardPayload) => void;
+  onSendMessageReady: (sendFn: (text: string) => void) => void;
 }
 
 /**
@@ -29,8 +30,10 @@ export default function SessionInner({
   onMetricsUpdate,
   onTranscriptUpdate,
   onWhiteboardUpdate,
+  onSendMessageReady,
 }: SessionInnerProps) {
   const lkConnectionState: LKConnectionState = useConnectionState();
+  const room = useRoomContext();
 
   // Sync LiveKit connection state up to the parent.
   useEffect(() => {
@@ -38,6 +41,19 @@ export default function SessionInner({
     logger.debug("lk_connection_state", { raw: lkConnectionState, mapped, subject });
     onConnectionStateChange(mapped);
   }, [lkConnectionState, onConnectionStateChange, subject]);
+
+  // Expose the text send function to parent once room is available.
+  useEffect(() => {
+    if (!room?.localParticipant) return;
+
+    const sendFn = (text: string) => {
+      const payload = new TextEncoder().encode(text);
+      room.localParticipant.publishData(payload, { reliable: true, topic: "chat_input" });
+      logger.info("text_message_sent", { length: text.length });
+    };
+
+    onSendMessageReady(sendFn);
+  }, [room, onSendMessageReady]);
 
   // Subscribe to the agent's data channel for metrics messages.
   const handleMetrics = useCallback(

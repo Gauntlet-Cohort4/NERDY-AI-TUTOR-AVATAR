@@ -26,10 +26,10 @@ class PhysicsTutorAgent(SubjectTutorAgent):
         )
 
     async def on_enter(self) -> None:
-        """Greet the student with a physics-specific welcome."""
+        """Greet the student and ask what they need help with."""
         logger.info("physics_greeting_triggered")
         self._update_stt_keyterms()
         self.session.generate_reply(
-            instructions="Welcome the student to the physics session about classical mechanics. "
-            "Ask an opening Socratic question about forces and motion to get them thinking."
+            instructions="Greet the student warmly (1 sentence). Then ask what specific "
+            "topic within Physics they'd like help with today. Keep it to 2 sentences total."
         )

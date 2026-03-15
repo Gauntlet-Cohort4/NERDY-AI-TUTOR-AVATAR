@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.metrics import _METRICS_TOPIC, MetricsCollector
-from tests.conftest import _send_full_turn
+from tests.conftest import _make_eou_event, _make_stt_event, _send_full_turn, _make_llm_event, _make_tts_event
 
 
 class TestMetricsCollectorInitialState:
@@ -35,11 +35,12 @@ class TestOnMetrics:
         assert len(metrics_collector.turn_metrics) == 1
         turn = metrics_collector.turn_metrics[0]
         assert turn.turn_number == 1
-        assert turn.stt_ms == pytest.approx(250.0)
+        # STT latency = stt_timestamp - eou_timestamp = 1.15 - 1.0 = 0.15s = 150ms
+        assert turn.stt_ms == pytest.approx(150.0)
         assert turn.llm_ttft_ms == pytest.approx(220.0)
         assert turn.tts_ttfb_ms == pytest.approx(90.0)
-        # total_e2e_ms is sum of stage timings: 250 + 220 + 90 = 560
-        assert turn.total_e2e_ms == pytest.approx(560.0)
+        # total_e2e_ms is sum of stage timings: 150 + 220 + 90 = 460
+        assert turn.total_e2e_ms == pytest.approx(460.0)
 
     def test_on_metrics_increments_turn_number(self, metrics_collector, mock_metrics_event):
         for _ in range(3):
@@ -47,6 +48,31 @@ class TestOnMetrics:
                 metrics_collector.on_metrics(event)
         turn_numbers = [t.turn_number for t in metrics_collector.turn_metrics]
         assert turn_numbers == [1, 2, 3]
+
+    def test_on_metrics_uses_eou_transcription_delay(self, metrics_collector):
+        """STT latency uses EOUMetrics.transcription_delay when available."""
+        collector = metrics_collector
+        collector.on_metrics(_make_eou_event(transcription_delay=0.3))
+        collector.on_metrics(_make_stt_event(duration=0.5))
+        # Should use transcription_delay (0.3), not audio_duration (0.5)
+        assert collector._latest_stt_duration == pytest.approx(0.3)
+
+    def test_on_metrics_falls_back_to_audio_duration_without_eou(self, metrics_collector):
+        """Without a preceding EOU event, STT latency falls back to audio_duration."""
+        collector = metrics_collector
+        collector.on_metrics(_make_stt_event(duration=0.42))
+        assert collector._latest_stt_duration == pytest.approx(0.42)
+
+    def test_eou_consumed_after_stt_prevents_cross_turn_reuse(self, metrics_collector):
+        """EOU transcription_delay is consumed by the next STT and not reused."""
+        collector = metrics_collector
+        # Turn 1: EOU + STT — uses transcription_delay
+        collector.on_metrics(_make_eou_event(transcription_delay=0.2))
+        collector.on_metrics(_make_stt_event(duration=0.5))
+        assert collector._latest_stt_duration == pytest.approx(0.2)
+        # Turn 2: STT without EOU — should fall back to audio_duration, not reuse 0.2
+        collector.on_metrics(_make_stt_event(duration=0.6))
+        assert collector._latest_stt_duration == pytest.approx(0.6)
 
 
 class TestGetLatestMetrics:
@@ -61,11 +87,12 @@ class TestGetLatestMetrics:
         assert latest["turn"] == 3
 
     def test_get_latest_metrics_values_rounded(self, metrics_collector):
+        # EOU transcription_delay = 0.12345s = 123.45ms
         _send_full_turn(
             metrics_collector,
-            stt_duration=0.12345,
             llm_ttft=0.22222,
             tts_ttfb=0.09876,
+            eou_transcription_delay=0.12345,
         )
         latest = metrics_collector.get_latest_metrics()
         assert latest["stt_ms"] == 123.5
@@ -84,12 +111,13 @@ class TestSessionSummary:
             # Vary the tts_ttfb so each turn has a different total e2e
             # total_e2e = (stt + llm + tts) * 1000
             # We want totals of 100ms, 200ms, ... 1000ms
-            # With stt=0.0 and llm=0.0 and tts_ttfb = i * 0.1
+            # With stt=0ms (eou_transcription_delay=0) and llm=0.0
             _send_full_turn(
                 metrics_collector,
                 stt_duration=0.0,
                 llm_ttft=0.0,
                 tts_ttfb=i * 0.1,
+                eou_transcription_delay=0.0,
             )
 
         summary = metrics_collector.session_summary()
@@ -107,6 +135,7 @@ class TestSessionSummary:
                 stt_duration=0.0,
                 llm_ttft=0.0,
                 tts_ttfb=tts_val,
+                eou_transcription_delay=0.0,
             )
 
         summary = metrics_collector.session_summary()
@@ -141,10 +170,11 @@ class TestPublishMetrics:
         payload = json.loads(call_args[0][0])
 
         assert payload["turn"] == 1
-        assert payload["stt_ms"] == 250.0
+        # STT latency = stt_timestamp - eou_timestamp = 1.15 - 1.0 = 150ms
+        assert payload["stt_ms"] == 150.0
         assert payload["llm_ttft_ms"] == 220.0
         assert payload["tts_ttfb_ms"] == 90.0
-        assert payload["total_e2e_ms"] == 560.0
+        assert payload["total_e2e_ms"] == 460.0
         assert call_args[1]["reliable"] is True
         assert call_args[1]["topic"] == _METRICS_TOPIC
 
@@ -191,8 +221,12 @@ class TestPublishMetrics:
         room = _make_mock_room()
         collector = MetricsCollector(session_id="round-test", room=room)
 
+        # EOU transcription_delay = 0.12345s = 123.45ms
         _send_full_turn(
-            collector, stt_duration=0.12345, llm_ttft=0.22222, tts_ttfb=0.09876
+            collector,
+            llm_ttft=0.22222,
+            tts_ttfb=0.09876,
+            eou_transcription_delay=0.12345,
         )
         await asyncio.sleep(0)
 

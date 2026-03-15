@@ -45,11 +45,22 @@ class AppConfig:
     cartesia_model: str = "sonic-3"
     cartesia_voice_id: str = "f786b574-daa5-4673-aa0c-cbe3e8534c02"
 
+    # Avatar provider — "simli", "hedra", or "beyondpresence"
+    avatar_provider: str = "simli"
+
     # Simli
     simli_api_key: str = ""
     simli_face_id: str = ""
     simli_max_session_length: int = 3600
     simli_max_idle_time: int = 300
+
+    # Hedra (reads HEDRA_API_KEY from env automatically)
+    hedra_api_key: str = ""
+    hedra_avatar_id: str = ""
+
+    # Beyond Presence
+    bey_api_key: str = ""
+    bey_avatar_id: str = ""
 
     # Application
     log_level: str = "INFO"
@@ -73,6 +84,8 @@ class AppConfig:
     @classmethod
     def from_env(cls) -> "AppConfig":
         """Load config from environment variables. Fails fast on missing required vars."""
+        avatar_provider = os.getenv("AVATAR_PROVIDER", "simli").lower()
+
         required = [
             "LIVEKIT_URL",
             "LIVEKIT_API_KEY",
@@ -80,9 +93,20 @@ class AppConfig:
             "DEEPGRAM_API_KEY",
             "GROQ_API_KEY",
             "CARTESIA_API_KEY",
-            "SIMLI_API_KEY",
-            "SIMLI_FACE_ID",
         ]
+        # Require provider-specific keys
+        if avatar_provider == "simli":
+            required += ["SIMLI_API_KEY", "SIMLI_FACE_ID"]
+        elif avatar_provider == "hedra":
+            required += ["HEDRA_API_KEY", "HEDRA_AVATAR_ID"]
+        elif avatar_provider == "beyondpresence":
+            required += ["BEY_API_KEY", "BEY_AVATAR_ID"]
+        else:
+            raise EnvironmentError(
+                f"Unknown AVATAR_PROVIDER '{avatar_provider}'. "
+                "Must be 'simli', 'hedra', or 'beyondpresence'."
+            )
+
         missing = [k for k in required if not os.getenv(k)]
         if missing:
             raise EnvironmentError(f"Missing required environment variables: {', '.join(missing)}")
@@ -100,8 +124,13 @@ class AppConfig:
             cartesia_voice_id=os.getenv(
                 "CARTESIA_VOICE_ID", "f786b574-daa5-4673-aa0c-cbe3e8534c02"
             ),
-            simli_api_key=os.environ["SIMLI_API_KEY"],
-            simli_face_id=os.environ["SIMLI_FACE_ID"],
+            avatar_provider=avatar_provider,
+            simli_api_key=os.getenv("SIMLI_API_KEY", ""),
+            simli_face_id=os.getenv("SIMLI_FACE_ID", ""),
+            hedra_api_key=os.getenv("HEDRA_API_KEY", ""),
+            hedra_avatar_id=os.getenv("HEDRA_AVATAR_ID", ""),
+            bey_api_key=os.getenv("BEY_API_KEY", ""),
+            bey_avatar_id=os.getenv("BEY_AVATAR_ID", ""),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             database_url=os.getenv("DATABASE_URL"),
             artifact_context_turns=int(os.getenv("ARTIFACT_CONTEXT_TURNS", "20")),
@@ -123,6 +152,7 @@ class AppConfig:
             "config_loaded",
             livekit_url=config.livekit_url,
             groq_model=config.groq_model,
+            avatar_provider=config.avatar_provider,
             database_configured=config.database_url is not None,
         )
         return config

@@ -26,11 +26,10 @@ class WorldHistoryTutorAgent(SubjectTutorAgent):
         )
 
     async def on_enter(self) -> None:
-        """Greet the student with a world history-specific welcome."""
+        """Greet the student and ask what they need help with."""
         logger.info("world_history_greeting_triggered")
         self._update_stt_keyterms()
         self.session.generate_reply(
-            instructions="Welcome the student to the world history session. "
-            "Ask an opening Socratic question to get them thinking about why "
-            "ancient civilizations rose and fell throughout history."
+            instructions="Greet the student warmly (1 sentence). Then ask what specific "
+            "topic within World History they'd like help with today. Keep it to 2 sentences total."
         )

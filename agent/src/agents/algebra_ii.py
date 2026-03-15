@@ -26,11 +26,10 @@ class AlgebraIITutorAgent(SubjectTutorAgent):
         )
 
     async def on_enter(self) -> None:
-        """Greet the student with an Algebra II-specific welcome."""
+        """Greet the student and ask what they need help with."""
         logger.info("algebra_ii_greeting_triggered")
         self._update_stt_keyterms()
         self.session.generate_reply(
-            instructions="Welcome the student to the Algebra II session. "
-            "Ask an opening Socratic question to get them thinking about how "
-            "quadratic equations relate to real-world parabolic shapes."
+            instructions="Greet the student warmly (1 sentence). Then ask what specific "
+            "topic within Algebra II they'd like help with today. Keep it to 2 sentences total."
         )

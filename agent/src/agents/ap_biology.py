@@ -26,11 +26,10 @@ class APBiologyTutorAgent(SubjectTutorAgent):
         )
 
     async def on_enter(self) -> None:
-        """Greet the student with an AP Biology-specific welcome."""
+        """Greet the student and ask what they need help with."""
         logger.info("ap_biology_greeting_triggered")
         self._update_stt_keyterms()
         self.session.generate_reply(
-            instructions="Welcome the student to the AP Biology session. "
-            "Ask an opening Socratic question to get them thinking about how "
-            "changes at the molecular level can affect an entire organism."
+            instructions="Greet the student warmly (1 sentence). Then ask what specific "
+            "topic within AP Biology they'd like help with today. Keep it to 2 sentences total."
         )

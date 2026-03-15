@@ -21,12 +21,35 @@ logger = structlog.get_logger(__name__)
 
 _MAX_TURN_CHARS = 500
 
+# Minimum student (user) turns required before artifact generation is useful.
+_MIN_STUDENT_TURNS = 2
+
 
 def _format_turns(turns: list[dict[str, Any]]) -> str:
     """Format transcript turn dicts into readable text, truncating long turns."""
     return "\n".join(
         f"{t['role']}: {t['content'][:_MAX_TURN_CHARS]}" for t in turns
     )
+
+
+def _count_student_turns(turns: list[dict[str, Any]]) -> int:
+    """Count turns from the student/user role."""
+    return sum(1 for t in turns if t.get("role") in ("student", "user"))
+
+
+def _not_enough_data_response(session_id: str, artifact_type: str) -> dict[str, Any]:
+    """Return a standard 'not enough conversation' error dict."""
+    logger.info(
+        "artifact_skipped_insufficient_turns",
+        session_id=str(session_id),
+        artifact_type=artifact_type,
+        min_required=_MIN_STUDENT_TURNS,
+    )
+    return {
+        "error": "Not enough conversation yet",
+        "detail": f"At least {_MIN_STUDENT_TURNS} student messages are needed "
+        "before generating study materials.",
+    }
 
 
 async def generate_summary(
@@ -41,6 +64,9 @@ async def generate_summary(
         pool, session_id, limit=artifact_context_turns,
     )
     recent_turns.reverse()  # chronological order
+
+    if _count_student_turns(recent_turns) < _MIN_STUDENT_TURNS:
+        return _not_enough_data_response(session_id, "summary").get("detail", "")
 
     prompt = f"""Summarize this AI tutoring session.
 
@@ -102,6 +128,9 @@ async def generate_cheat_sheet(
         pool, session_id, limit=artifact_context_turns,
     )
     recent_turns.reverse()
+
+    if _count_student_turns(recent_turns) < _MIN_STUDENT_TURNS:
+        return _not_enough_data_response(session_id, "cheat_sheet")
 
     prompt = f"""Based on this {subject} tutoring session (grade {grade}), create a study cheat sheet.
 
@@ -172,6 +201,12 @@ async def generate_worksheet(
     artifact_context_turns: int = 20,
 ) -> dict[str, Any]:
     """Generate a practice worksheet with 8-12 problems."""
+    recent_turns = await sessions_db.get_recent_turns(
+        pool, session_id, limit=artifact_context_turns,
+    )
+    if _count_student_turns(recent_turns) < _MIN_STUDENT_TURNS:
+        return _not_enough_data_response(session_id, "worksheet")
+
     prompt = f"""Based on this {subject} tutoring session (grade {grade}), create a practice worksheet.
 
 Summary: {summary}
@@ -250,6 +285,9 @@ async def generate_review_quiz(
         pool, session_id, limit=artifact_context_turns,
     )
     recent_turns.reverse()
+
+    if _count_student_turns(recent_turns) < _MIN_STUDENT_TURNS:
+        return _not_enough_data_response(session_id, "review_quiz")
 
     prompt = f"""Based on this {session['subject']} session (grade {session['grade']}), create a quick review quiz.
 
@@ -336,6 +374,9 @@ async def generate_flash_cards(
         pool, session_id, limit=artifact_context_turns,
     )
     recent_turns.reverse()
+
+    if _count_student_turns(recent_turns) < _MIN_STUDENT_TURNS:
+        return []
 
     subject = session.get("subject", "general")
     grade = session.get("grade", 8)

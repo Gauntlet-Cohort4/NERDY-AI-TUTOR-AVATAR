@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
 import { createLogger } from "@/lib/logger";
@@ -66,6 +66,7 @@ function SessionContent() {
   const [isConnected, setIsConnected] = useState(false);
   const [whiteboardPayload, setWhiteboardPayload] = useState<WhiteboardPayload | null>(null);
   const [isWhiteboardActive, setIsWhiteboardActive] = useState(false);
+  const sendMessageRef = useRef<((text: string) => void) | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,7 +163,23 @@ function SessionContent() {
           setIsLoadingToken(false);
         });
     }
-  }, [tokenState, isLoadingToken, subject]);
+  }, [tokenState, isLoadingToken, subject, grade]);
+
+  const handleSendMessageReady = useCallback((sendFn: (text: string) => void) => {
+    sendMessageRef.current = sendFn;
+  }, []);
+
+  const handleSendMessage = useCallback((text: string) => {
+    // Add to transcript immediately so user sees their message
+    const id = `typed-${Date.now()}`;
+    setTranscriptEntries((prev) => [
+      ...prev,
+      { id, role: "user", text, timestamp: Date.now() },
+    ]);
+    // Send via LiveKit data channel to the agent
+    sendMessageRef.current?.(text);
+    logger.info("text_message_submitted", { length: text.length });
+  }, []);
 
   if (isLoadingToken) {
     return (
@@ -206,6 +223,7 @@ function SessionContent() {
         onMetricsUpdate={handleMetricsUpdate}
         onTranscriptUpdate={handleTranscriptUpdate}
         onWhiteboardUpdate={handleWhiteboardUpdate}
+        onSendMessageReady={handleSendMessageReady}
       />
       <div className="flex min-h-screen bg-gray-950 text-white">
         <main className="flex flex-1 flex-col">
@@ -245,7 +263,12 @@ function SessionContent() {
             />
           </footer>
         </main>
-        <TranscriptSidebar entries={transcriptEntries} visible={transcriptVisible} />
+        <TranscriptSidebar
+          entries={transcriptEntries}
+          visible={transcriptVisible}
+          onSendMessage={handleSendMessage}
+          isConnected={isConnected}
+        />
       </div>
     </LiveKitRoom>
   );

@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 import structlog
 from livekit.agents.metrics import (
+    EOUMetrics,
     LLMMetrics,
     STTMetrics,
     TTSMetrics,
@@ -60,6 +61,9 @@ class MetricsCollector:
         self._latest_stt_duration: float = 0.0
         self._latest_llm_ttft: float = 0.0
         self._latest_tts_ttfb: float = 0.0
+        # EOU transcription_delay: time from end-of-speech to transcript ready.
+        # None = no EOU event seen yet for this turn.
+        self._latest_eou_transcription_delay: float | None = None
 
     def on_metrics(self, event) -> None:
         """Handle ``MetricsCollectedEvent`` emitted by ``AgentSession``.
@@ -72,11 +76,24 @@ class MetricsCollector:
         metrics = event.metrics
 
         if isinstance(metrics, STTMetrics):
-            self._latest_stt_duration = metrics.duration
+            # Use EOUMetrics.transcription_delay if available — it measures
+            # exactly "time from end-of-speech to transcript ready" inside the
+            # livekit-agents pipeline.  Fall back to audio_duration when no EOU
+            # event preceded this STT event.
+            eou_delay = self._latest_eou_transcription_delay
+            self._latest_eou_transcription_delay = None  # consume — prevent cross-turn reuse
+            if eou_delay is not None:
+                stt_latency = eou_delay
+            else:
+                stt_latency = metrics.audio_duration
+            self._latest_stt_duration = stt_latency
             logger.debug(
                 "stt_metrics",
                 session_id=self.session_id,
-                duration_s=metrics.duration,
+                stt_latency_s=stt_latency,
+                audio_duration_s=metrics.audio_duration,
+                used_eou_delay=eou_delay is not None,
+                streamed=metrics.streamed,
             )
         elif isinstance(metrics, LLMMetrics):
             self._latest_llm_ttft = metrics.ttft
@@ -126,9 +143,25 @@ class MetricsCollector:
                 loop.create_task(self._publish_turn_metrics(turn))
             else:
                 logger.debug("no_event_loop_for_metrics_publish", session_id=self.session_id)
+        elif isinstance(metrics, EOUMetrics):
+            # transcription_delay = time from end-of-speech to transcript ready.
+            # This is the authoritative STT processing latency from the pipeline.
+            if self._latest_eou_transcription_delay is not None:
+                logger.debug(
+                    "eou_overwritten_before_consumption",
+                    session_id=self.session_id,
+                    previous_delay=self._latest_eou_transcription_delay,
+                )
+            self._latest_eou_transcription_delay = metrics.transcription_delay
+            logger.debug(
+                "eou_metrics",
+                session_id=self.session_id,
+                transcription_delay=metrics.transcription_delay,
+                end_of_utterance_delay=metrics.end_of_utterance_delay,
+            )
         else:
-            # VADMetrics, EOUMetrics, RealtimeModelMetrics — log but don't
-            # incorporate into turn timing.
+            # VADMetrics, RealtimeModelMetrics — log but don't incorporate
+            # into turn timing.
             logger.debug(
                 "other_metrics",
                 session_id=self.session_id,

@@ -48,9 +48,8 @@ const ALL_GRADES: readonly Grade[] = [...MIDDLE_SCHOOL, ...HIGH_SCHOOL];
 // Grade-band subject maps
 const MIDDLE_SCHOOL_SUBJECTS: readonly SubjectConfig[] = [
   { name: "Fractions", subject: "math", topic: "Numerators, Denominators & More", icon: "calc", color: "#6F42C1", bg: "rgba(111,66,193,0.08)" },
-  { name: "Basic Biology", subject: "biology", topic: "Photosynthesis", icon: "leaf", color: "#28A745", bg: "rgba(40,167,69,0.08)" },
+  { name: "Basic Biology", subject: "biology", topic: "Plants & Photosynthesis", icon: "leaf", color: "#28A745", bg: "rgba(40,167,69,0.08)" },
   { name: "Earth Science", subject: "earth_science", topic: "Rocks, Tectonics & Erosion", icon: "globe", color: "#17A2B8", bg: "rgba(23,162,184,0.08)" },
-  { name: "Intro Algebra", subject: "intro_algebra", topic: "Variables & Equations", icon: "calc", color: "#E83E8C", bg: "rgba(232,62,140,0.08)" },
 ];
 
 const HIGH_SCHOOL_LOWER_SUBJECTS: readonly SubjectConfig[] = [
@@ -184,6 +183,10 @@ function getGradeBand(gradeId: string): "middle" | "hs_lower" | "hs_upper" | nul
   if (num >= 9 && num <= 10) return "hs_lower";
   if (num >= 11 && num <= 12) return "hs_upper";
   return null;
+}
+
+function isGradeBandActive(gradeId: string): boolean {
+  return getGradeBand(gradeId) === "middle";
 }
 
 function getSubjectsForGrade(gradeId: string): readonly SubjectConfig[] {
@@ -333,6 +336,7 @@ interface GradeGroupProps {
   onGradeClick: (id: string) => void;
   onHover: (id: string | null) => void;
   indexOffset: number;
+  demo?: boolean;
 }
 
 function GradeGroup({
@@ -343,12 +347,13 @@ function GradeGroup({
   onGradeClick,
   onHover,
   indexOffset,
+  demo = false,
 }: GradeGroupProps) {
   return (
     <div className="flex flex-col items-center gap-3">
       <span
         className="text-[11px] font-semibold uppercase tracking-wider"
-        style={{ color: "#6a7f99" }}
+        style={{ color: demo ? "#4a5568" : "#6a7f99" }}
       >
         {title}
       </span>
@@ -364,24 +369,39 @@ function GradeGroup({
               onClick={() => onGradeClick(g.id)}
               onMouseEnter={() => onHover(g.id)}
               onMouseLeave={() => onHover(null)}
-              className="cursor-pointer"
+              className={demo ? "" : "cursor-pointer"}
+              title={demo ? "Coming soon" : undefined}
+              aria-label={`${g.label}${demo ? " (coming soon)" : ""}`}
               style={{
-                background: isActive
-                  ? "linear-gradient(135deg, #007AFF, #0056b3)"
-                  : isHovered
-                    ? "rgba(255,255,255,0.08)"
-                    : "rgba(255,255,255,0.04)",
-                border: isActive
-                  ? "2px solid #007AFF"
-                  : "2px solid rgba(255,255,255,0.08)",
+                background: demo
+                  ? isActive
+                    ? "linear-gradient(135deg, #4a5568, #2d3748)"
+                    : isHovered
+                      ? "rgba(255,255,255,0.05)"
+                      : "rgba(255,255,255,0.02)"
+                  : isActive
+                    ? "linear-gradient(135deg, #007AFF, #0056b3)"
+                    : isHovered
+                      ? "rgba(255,255,255,0.08)"
+                      : "rgba(255,255,255,0.04)",
+                border: demo
+                  ? isActive
+                    ? "2px solid #4a5568"
+                    : "2px solid rgba(255,255,255,0.05)"
+                  : isActive
+                    ? "2px solid #007AFF"
+                    : "2px solid rgba(255,255,255,0.08)",
                 borderRadius: 14, padding: "20px 32px",
+                opacity: demo ? 0.6 : 1,
                 transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)",
                 transform: isActive ? "translateY(-4px)" : isHovered ? "translateY(-2px)" : "none",
-                boxShadow: isActive
-                  ? "0 12px 32px rgba(0,122,255,0.25)"
-                  : isHovered
-                    ? "0 6px 20px rgba(0,0,0,0.2)"
-                    : "none",
+                boxShadow: demo
+                  ? "none"
+                  : isActive
+                    ? "0 12px 32px rgba(0,122,255,0.25)"
+                    : isHovered
+                      ? "0 6px 20px rgba(0,0,0,0.2)"
+                      : "none",
                 minWidth: 110, fontFamily: "inherit",
                 animation: `float-in 0.5s ease ${(indexOffset + i) * 0.08}s both`,
               }}
@@ -389,7 +409,10 @@ function GradeGroup({
               <div
                 className="font-extrabold mb-1"
                 style={{
-                  fontSize: 28, color: isActive ? "#fff" : "#c0d0e0",
+                  fontSize: 28,
+                  color: demo
+                    ? isActive ? "#a0aec0" : "#718096"
+                    : isActive ? "#fff" : "#c0d0e0",
                   letterSpacing: "-0.02em",
                 }}
               >
@@ -399,7 +422,9 @@ function GradeGroup({
                 className="font-medium"
                 style={{
                   fontSize: 13,
-                  color: isActive ? "rgba(255,255,255,0.85)" : "#6a7f99",
+                  color: demo
+                    ? isActive ? "rgba(160,174,192,0.85)" : "#4a5568"
+                    : isActive ? "rgba(255,255,255,0.85)" : "#6a7f99",
                 }}
               >
                 {g.label}
@@ -606,6 +631,9 @@ export default function Home() {
     [selectedGrade],
   );
 
+  const isDemoGrade = selectedGrade ? !isGradeBandActive(selectedGrade) : false;
+  const canStartSession = Boolean(selectedSubject && selectedGrade && !isDemoGrade);
+
   // Fetch sessions and flash card stats on mount
   useEffect(() => {
     const userId = getUserId();
@@ -737,6 +765,7 @@ export default function Home() {
             onGradeClick={handleGradeClick}
             onHover={setHoveredGrade}
             indexOffset={MIDDLE_SCHOOL.length}
+            demo
           />
         </div>
       </section>
@@ -764,54 +793,86 @@ export default function Home() {
 
           <div className="flex justify-center gap-4 flex-wrap" role="radiogroup" aria-label="Subject">
             {subjects.map((subj, i) => {
-              const isChosen = selectedSubject === subj.subject;
-              const isHovered = hoveredSubject === subj.subject;
+              const isChosen = !isDemoGrade && selectedSubject === subj.subject;
+              const isHovered = !isDemoGrade && hoveredSubject === subj.subject;
               const showHighlight = isChosen || isHovered;
               return (
                 <button
                   key={subj.subject}
                   role="radio"
                   aria-checked={isChosen}
-                  onClick={() => handleSubjectClick(subj.subject)}
-                  onMouseEnter={() => setHoveredSubject(subj.subject)}
-                  onMouseLeave={() => setHoveredSubject(null)}
-                  className="cursor-pointer text-center"
+                  aria-disabled={isDemoGrade}
+                  aria-label={isDemoGrade ? `${subj.name} — Demo, coming soon` : subj.name}
+                  onClick={isDemoGrade ? undefined : () => handleSubjectClick(subj.subject)}
+                  onMouseEnter={isDemoGrade ? undefined : () => setHoveredSubject(subj.subject)}
+                  onMouseLeave={isDemoGrade ? undefined : () => setHoveredSubject(null)}
+                  className={isDemoGrade ? "text-center" : "cursor-pointer text-center"}
                   style={{
-                    background: isChosen
-                      ? `linear-gradient(135deg, ${subj.color}15, ${subj.color}08)`
-                      : "rgba(255,255,255,0.03)",
-                    border: showHighlight
-                      ? `2px solid ${subj.color}`
-                      : "2px solid rgba(255,255,255,0.06)",
+                    position: "relative",
+                    background: isDemoGrade
+                      ? "rgba(255,255,255,0.02)"
+                      : isChosen
+                        ? `linear-gradient(135deg, ${subj.color}15, ${subj.color}08)`
+                        : "rgba(255,255,255,0.03)",
+                    border: isDemoGrade
+                      ? "2px solid rgba(255,255,255,0.04)"
+                      : showHighlight
+                        ? `2px solid ${subj.color}`
+                        : "2px solid rgba(255,255,255,0.06)",
                     borderRadius: 16, padding: "28px 24px",
                     minWidth: 180, maxWidth: 200, fontFamily: "inherit",
                     transition: "all 0.3s ease",
                     transform: isHovered && !isChosen ? "translateY(-4px)" : "none",
                     boxShadow: isHovered && !isChosen ? `0 8px 24px ${subj.color}20` : "none",
                     animation: subjectsVisible ? `fade-slide-up 0.4s ease ${i * 0.1}s both` : "none",
-                    opacity: subjectsVisible ? 1 : 0,
+                    opacity: isDemoGrade ? 0.45 : subjectsVisible ? 1 : 0,
+                    cursor: isDemoGrade ? "default" : "pointer",
+                    filter: isDemoGrade ? "grayscale(0.7)" : "none",
                   }}
                 >
+                  {isDemoGrade && (
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        position: "absolute",
+                        top: 8,
+                        right: 8,
+                        background: "rgba(100,116,139,0.5)",
+                        color: "#cbd5e1",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                        padding: "2px 8px",
+                        borderRadius: 6,
+                        lineHeight: "18px",
+                      }}
+                    >
+                      DEMO
+                    </span>
+                  )}
                   <div
                     className="flex items-center justify-center mx-auto mb-3.5"
-                    style={{ width: 52, height: 52, borderRadius: 14, background: subj.bg }}
+                    style={{ width: 52, height: 52, borderRadius: 14, background: isDemoGrade ? "rgba(255,255,255,0.04)" : subj.bg }}
                   >
-                    <SubjectIcon type={subj.icon} color={subj.color} />
+                    <SubjectIcon type={subj.icon} color={isDemoGrade ? "#4a5568" : subj.color} />
                   </div>
-                  <div className="font-bold mb-1" style={{ fontSize: 16, color: "#e0e8f0" }}>
+                  <div className="font-bold mb-1" style={{ fontSize: 16, color: isDemoGrade ? "#718096" : "#e0e8f0" }}>
                     {subj.name}
                   </div>
-                  <div className="font-normal" style={{ fontSize: 13, color: "#6a7f99" }}>
+                  <div className="font-normal" style={{ fontSize: 13, color: isDemoGrade ? "#4a5568" : "#6a7f99" }}>
                     {subj.topic}
                   </div>
-                  <SubjectSessionBadge sessions={sessionsForSubject(subj.subject)} />
+                  {!isDemoGrade && (
+                    <SubjectSessionBadge sessions={sessionsForSubject(subj.subject)} />
+                  )}
                 </button>
               );
             })}
           </div>
 
-          {/* Start Button */}
-          {selectedSubject && (
+          {/* Start Button — only for active (non-demo) grades */}
+          {canStartSession && (
             <div
               className="text-center"
               style={{ marginTop: 36, animation: "fade-slide-up 0.4s ease both" }}

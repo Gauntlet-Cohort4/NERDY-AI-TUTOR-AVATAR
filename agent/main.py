@@ -2,7 +2,7 @@
 
 This module starts the LiveKit AgentServer and wires together:
 - AgentSession with STT, LLM, TTS plugins
-- Simli AvatarSession for video rendering
+- Avatar rendering (Simli, Hedra, or Beyond Presence, via AVATAR_PROVIDER env var)
 - MetricsCollector for latency tracking
 - SubjectRouterAgent as the initial agent
 - HTTP server on port 8080 for health checks and REST API endpoints
@@ -22,6 +22,16 @@ import structlog
 from livekit.agents import Agent, AgentSession
 from livekit.plugins import cartesia, deepgram, groq, silero, simli  # noqa: F401
 
+try:
+    from livekit.plugins import hedra  # noqa: F401
+except ImportError:
+    hedra = None  # Hedra plugin optional; only needed when AVATAR_PROVIDER=hedra
+
+try:
+    from livekit.plugins import bey  # noqa: F401
+except ImportError:
+    bey = None  # Bey plugin optional; only needed when AVATAR_PROVIDER=beyondpresence
+
 from src.agents.algebra_ii import AlgebraIITutorAgent
 from src.agents.ap_biology import APBiologyTutorAgent
 from src.agents.biology import BiologyTutorAgent
@@ -34,7 +44,7 @@ from src.agents.math import MathTutorAgent
 from src.agents.physics import PhysicsTutorAgent
 from src.agents.router import SubjectRouterAgent
 from src.agents.world_history import WorldHistoryTutorAgent
-from src.avatar.renderer import SimliAvatarAdapter
+from src.avatar.renderer import create_avatar
 from src.config import AppConfig
 from src.education.history import ConversationHistory
 from src.education.tracker import ConversationTracker
@@ -158,8 +168,7 @@ class AgentSessionConfig:
     tts_provider: str
     tts_model: str
     tts_voice_id: str
-    simli_api_key: str
-    simli_face_id: str
+    avatar_provider: str
 
 
 def create_agent_session(config: AppConfig) -> AgentSessionConfig:
@@ -176,8 +185,7 @@ def create_agent_session(config: AppConfig) -> AgentSessionConfig:
         tts_provider="cartesia",
         tts_model=config.cartesia_model,
         tts_voice_id=config.cartesia_voice_id,
-        simli_api_key=config.simli_api_key,
-        simli_face_id=config.simli_face_id,
+        avatar_provider=config.avatar_provider,
     )
 
 
@@ -243,7 +251,7 @@ def _resolve_agent(room_name: str) -> Agent:
 async def entrypoint(ctx) -> None:
     """LiveKit AgentServer entrypoint — called for each new room connection.
 
-    Wires STT → LLM → TTS pipeline with Simli avatar and metrics collection.
+    Wires STT → LLM → TTS pipeline with avatar and metrics collection.
     """
     config = AppConfig.from_env()
     session_id = ctx.room.name if hasattr(ctx, "room") else "unknown"
@@ -272,13 +280,8 @@ async def entrypoint(ctx) -> None:
         text_pacing=True,
     )
 
-    # Avatar
-    avatar = SimliAvatarAdapter(
-        api_key=config.simli_api_key,
-        face_id=config.simli_face_id,
-        max_session_length=config.simli_max_session_length,
-        max_idle_time=config.simli_max_idle_time,
-    )
+    # Avatar — provider selected by AVATAR_PROVIDER env var
+    avatar = create_avatar(config)
 
     # Metrics — pass the room so metrics are published to the data channel
     metrics = MetricsCollector(session_id=session_id, room=ctx.room)
@@ -343,6 +346,27 @@ async def entrypoint(ctx) -> None:
         room=ctx.room,
         agent=agent,
     )
+
+    # Handle typed text input from the frontend (accessibility alternative to mic).
+    # The frontend publishes UTF-8 text on the "chat_input" data channel topic.
+    # We feed it into the agent session as user input via generate_reply().
+    @ctx.room.on("data_received")
+    def _on_data_received(data_packet) -> None:
+        topic = getattr(data_packet, "topic", None)
+        if topic != "chat_input":
+            return
+        try:
+            raw = data_packet.data
+            text = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
+            text = text.strip()
+            if not text:
+                return
+            logger.info("text_input_received", session_id=session_id, length=len(text))
+            import asyncio
+
+            asyncio.ensure_future(session.generate_reply(user_input=text))
+        except Exception:
+            logger.warning("text_input_handling_failed", session_id=session_id, exc_info=True)
 
     # Initial greeting is triggered by the agent's on_enter() hook,
     # which the framework calls once the session activity is fully ready.

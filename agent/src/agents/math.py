@@ -26,10 +26,10 @@ class MathTutorAgent(SubjectTutorAgent):
         )
 
     async def on_enter(self) -> None:
-        """Greet the student with a math-specific welcome."""
+        """Greet the student and ask what they need help with."""
         logger.info("math_greeting_triggered")
         self._update_stt_keyterms()
         self.session.generate_reply(
-            instructions="Welcome the student to the math session about fractions. "
-            "Ask an opening Socratic question to get them thinking about what fractions represent."
+            instructions="Greet the student warmly (1 sentence). Then ask what specific "
+            "topic within Math they'd like help with today. Keep it to 2 sentences total."
         )

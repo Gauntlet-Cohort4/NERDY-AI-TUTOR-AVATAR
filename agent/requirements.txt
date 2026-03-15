@@ -1,5 +1,6 @@
 # Production dependencies
-livekit-agents[deepgram,groq,cartesia,simli,silero,turn-detector]~=1.4
+livekit-agents[deepgram,groq,cartesia,simli,hedra,silero,turn-detector]~=1.4
+livekit-plugins-bey~=1.4
 structlog>=24.0.0,<25.0
 python-dotenv>=1.0,<2.0
 asyncpg>=0.29,<1.0

@@ -26,11 +26,10 @@ class CalculusTutorAgent(SubjectTutorAgent):
         )
 
     async def on_enter(self) -> None:
-        """Greet the student with a calculus-specific welcome."""
+        """Greet the student and ask what they need help with."""
         logger.info("calculus_greeting_triggered")
         self._update_stt_keyterms()
         self.session.generate_reply(
-            instructions="Welcome the student to the calculus session. "
-            "Ask an opening Socratic question to get them thinking about what "
-            "it means for a function to have a rate of change at a single point."
+            instructions="Greet the student warmly (1 sentence). Then ask what specific "
+            "topic within Calculus they'd like help with today. Keep it to 2 sentences total."
         )

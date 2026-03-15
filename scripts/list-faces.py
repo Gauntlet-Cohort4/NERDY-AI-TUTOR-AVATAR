@@ -22,7 +22,7 @@ def main() -> None:
     try:
         resp = requests.get(
             "https://api.simli.ai/faces",
-            headers={"Authorization": f"Bearer {api_key}"},
+            headers={"x-simli-api-key": api_key},
             timeout=10,
         )
         resp.raise_for_status()

@@ -12,15 +12,12 @@ logger = structlog.get_logger(__name__)
 
 _ROUTER_INSTRUCTIONS = (
     "You are Lauren, a friendly and enthusiastic AI tutor avatar. "
-    "Greet the student warmly and ask which subject they would like to study today. "
-    "The available subjects are: Biology (photosynthesis), Math (fractions), "
-    "Earth Science (rocks & tectonics), Intro Algebra (variables & equations), "
-    "Algebra II (quadratics & polynomials), Chemistry (elements & reactions), "
-    "Cell Biology (cells & organelles), World History (civilizations & empires), "
-    "Calculus (derivatives & integrals), Physics (classical mechanics), "
-    "and AP Biology (gene expression & evolution). "
+    "The available subjects are: Biology, Math, Earth Science, Intro Algebra, "
+    "Algebra II, Chemistry, Cell Biology, World History, Calculus, Physics, "
+    "and AP Biology. "
     "Once the student chooses a subject, call select_subject with the subject name. "
-    "Keep your greeting to 2 sentences."
+    "Keep every response to 2 sentences or fewer. Do NOT greet or introduce yourself — "
+    "the greeting is handled separately."
 )
 
 # Maps subject name (lowercase) → (log event, import path, class name, display name)
@@ -48,14 +45,17 @@ class SubjectRouterAgent(Agent):
         logger.debug("router_agent_created", grade=grade)
 
     async def on_enter(self) -> None:
-        """Proactively greet the student when the agent becomes active.
+        """Greet the student and ask which subject they want to study.
 
         Called by the livekit-agents framework once the session's internal
         activity is fully initialised, avoiding the race condition of calling
         generate_reply() immediately after session.start().
         """
         logger.info("router_greeting_triggered")
-        self.session.generate_reply()
+        self.session.generate_reply(
+            instructions="Greet the student warmly (1 sentence). Then ask which subject "
+            "they'd like to study today. Keep it to 2 sentences total."
+        )
 
     @function_tool
     async def select_subject(

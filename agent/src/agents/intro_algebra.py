@@ -26,11 +26,10 @@ class IntroAlgebraTutorAgent(SubjectTutorAgent):
         )
 
     async def on_enter(self) -> None:
-        """Greet the student with an intro algebra-specific welcome."""
+        """Greet the student and ask what they need help with."""
         logger.info("intro_algebra_greeting_triggered")
         self._update_stt_keyterms()
         self.session.generate_reply(
-            instructions="Welcome the student to the intro algebra session. "
-            "Ask an opening Socratic question to get them thinking about what a "
-            "variable represents in an equation."
+            instructions="Greet the student warmly (1 sentence). Then ask what specific "
+            "topic within Intro Algebra they'd like help with today. Keep it to 2 sentences total."
         )

@@ -14,7 +14,10 @@ interface Vector {
 }
 
 export default function ForceVector({ params }: ForceVectorProps) {
-  const vectors = Array.isArray(params.vectors) ? (params.vectors as Vector[]) : [];
+  const vectors = useMemo(
+    () => (Array.isArray(params.vectors) ? (params.vectors as Vector[]) : []),
+    [params.vectors]
+  );
   const title = typeof params.title === "string" ? params.title : "Force Vectors";
   const showResultant = params.show_resultant !== false;
   const scale = typeof params.scale === "number" ? params.scale : 1;

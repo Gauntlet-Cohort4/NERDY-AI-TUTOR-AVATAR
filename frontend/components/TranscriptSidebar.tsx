@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface TranscriptEntry {
   id: string;
@@ -12,6 +12,8 @@ export interface TranscriptEntry {
 interface TranscriptSidebarProps {
   entries: readonly TranscriptEntry[];
   visible: boolean;
+  onSendMessage?: (text: string) => void;
+  isConnected?: boolean;
 }
 
 function formatTime(ts: number): string {
@@ -19,8 +21,15 @@ function formatTime(ts: number): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-export default function TranscriptSidebar({ entries, visible }: TranscriptSidebarProps) {
+export default function TranscriptSidebar({
+  entries,
+  visible,
+  onSendMessage,
+  isConnected = false,
+}: TranscriptSidebarProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [inputText, setInputText] = useState("");
 
   // Auto-scroll to bottom when entries change (new messages or streaming updates)
   useEffect(() => {
@@ -29,6 +38,24 @@ export default function TranscriptSidebar({ entries, visible }: TranscriptSideba
       el.scrollTop = el.scrollHeight;
     }
   }, [entries]);
+
+  const handleSend = useCallback(() => {
+    const trimmed = inputText.trim();
+    if (!trimmed || !onSendMessage) return;
+    onSendMessage(trimmed);
+    setInputText("");
+    inputRef.current?.focus();
+  }, [inputText, onSendMessage]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    },
+    [handleSend],
+  );
 
   if (!visible) return null;
 
@@ -77,6 +104,40 @@ export default function TranscriptSidebar({ entries, visible }: TranscriptSideba
           ))
         )}
       </div>
+
+      {/* Text input for typing messages (accessible alternative to mic) */}
+      {onSendMessage && (
+        <div className="px-3 py-3 border-t border-gray-800 flex-shrink-0">
+          <div className="flex gap-2">
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={!isConnected}
+              placeholder={isConnected ? "Type a message…" : "Connect to chat"}
+              className="flex-1 bg-gray-800 text-gray-200 text-sm rounded-lg px-3 py-2
+                         border border-gray-700 focus:border-blue-500 focus:outline-none
+                         placeholder:text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Type a message to the tutor"
+            />
+            <button
+              onClick={handleSend}
+              disabled={!isConnected || !inputText.trim()}
+              className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg
+                         hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed
+                         transition-colors"
+              aria-label="Send message"
+            >
+              Send
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-600 mt-1.5 px-1">
+            Press Enter to send — use this if you can&apos;t use your mic
+          </p>
+        </div>
+      )}
     </aside>
   );
 }

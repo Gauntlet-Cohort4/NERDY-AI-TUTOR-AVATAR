@@ -26,11 +26,10 @@ class EarthScienceTutorAgent(SubjectTutorAgent):
         )
 
     async def on_enter(self) -> None:
-        """Greet the student with an Earth science-specific welcome."""
+        """Greet the student and ask what they need help with."""
         logger.info("earth_science_greeting_triggered")
         self._update_stt_keyterms()
         self.session.generate_reply(
-            instructions="Welcome the student to the Earth science session. "
-            "Ask an opening Socratic question to get them thinking about what forces "
-            "shape the surface of our planet."
+            instructions="Greet the student warmly (1 sentence). Then ask what specific "
+            "topic within Earth Science they'd like help with today. Keep it to 2 sentences total."
         )

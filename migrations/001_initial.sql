@@ -69,10 +69,10 @@ CREATE TABLE IF NOT EXISTS flash_cards (
     source_session_id UUID REFERENCES sessions(id),
     mastery           TEXT NOT NULL DEFAULT 'new',
     last_reviewed_at  TIMESTAMPTZ,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (user_id, subject, LOWER(term))
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_flash_cards_user_subject_term ON flash_cards(user_id, subject, LOWER(term));
 CREATE INDEX IF NOT EXISTS idx_flash_cards_user_subject ON flash_cards(user_id, subject);
 
 -- ─── Uploads ────────────────────────────────────────────────────────────────

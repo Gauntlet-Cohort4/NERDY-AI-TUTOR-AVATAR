@@ -26,11 +26,10 @@ class ChemistryTutorAgent(SubjectTutorAgent):
         )
 
     async def on_enter(self) -> None:
-        """Greet the student with a chemistry-specific welcome."""
+        """Greet the student and ask what they need help with."""
         logger.info("chemistry_greeting_triggered")
         self._update_stt_keyterms()
         self.session.generate_reply(
-            instructions="Welcome the student to the chemistry session. "
-            "Ask an opening Socratic question to get them thinking about what "
-            "happens to atoms when substances combine in a chemical reaction."
+            instructions="Greet the student warmly (1 sentence). Then ask what specific "
+            "topic within Chemistry they'd like help with today. Keep it to 2 sentences total."
         )

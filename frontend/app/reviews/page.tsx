@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { getUserId } from "@/lib/user";
 import { listSessions, listArtifacts, downloadArtifactPdf } from "@/lib/api";
@@ -229,10 +229,14 @@ export default function ReviewsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [grouped, setGrouped] = useState<GroupedSessions>(new Map());
+  const [allSessions, setAllSessions] = useState<
+    readonly SessionWithArtifacts[]
+  >([]);
   const [expandedSummaryId, setExpandedSummaryId] = useState<string | null>(
     null
   );
+  const [subjectFilter, setSubjectFilter] = useState<Subject | null>(null);
+  const [gradeFilter, setGradeFilter] = useState<number | null>(null);
 
   useEffect(() => {
     const userId = getUserId();
@@ -265,7 +269,7 @@ export default function ReviewsPage() {
         );
 
         if (!cancelled) {
-          setGrouped(groupBySubject(withArtifacts));
+          setAllSessions(withArtifacts);
           setLoading(false);
         }
       } catch (err) {
@@ -283,6 +287,44 @@ export default function ReviewsPage() {
     };
   }, []);
 
+  // Extract unique subjects and grades from loaded sessions
+  const uniqueSubjects = useMemo<readonly Subject[]>(
+    () =>
+      [...new Set(allSessions.map((s) => s.session.subject))].sort(),
+    [allSessions]
+  );
+
+  const uniqueGrades = useMemo<readonly number[]>(
+    () =>
+      [...new Set(allSessions.map((s) => s.session.grade))].sort(
+        (a, b) => a - b
+      ),
+    [allSessions]
+  );
+
+  // Apply filters (AND logic)
+  const filteredSessions = useMemo<readonly SessionWithArtifacts[]>(
+    () =>
+      allSessions.filter((item) => {
+        const matchesSubject =
+          subjectFilter === null || item.session.subject === subjectFilter;
+        const matchesGrade =
+          gradeFilter === null || item.session.grade === gradeFilter;
+        return matchesSubject && matchesGrade;
+      }),
+    [allSessions, subjectFilter, gradeFilter]
+  );
+
+  // Group filtered sessions by subject (only when showing all subjects)
+  const grouped = useMemo<GroupedSessions>(
+    () => groupBySubject(filteredSessions),
+    [filteredSessions]
+  );
+
+  const hasData = allSessions.length > 0;
+  const hasFilteredResults = filteredSessions.length > 0;
+  const isFiltering = subjectFilter !== null || gradeFilter !== null;
+
   return (
     <div className="min-h-screen" style={{ background: "#0a1d37" }}>
       {/* Header */}
@@ -294,10 +336,18 @@ export default function ReviewsPage() {
           borderBottom: "1px solid rgba(255,255,255,0.06)",
         }}
       >
-        <button
-          onClick={() => router.push("/")}
-          className="flex items-center gap-2.5 bg-transparent border-none cursor-pointer"
-        >
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.push("/")}
+            className="flex items-center gap-1 bg-transparent border-none cursor-pointer text-blue-400 text-sm hover:text-blue-300"
+            aria-label="Back to Home"
+          >
+            <span>&larr;</span> Back
+          </button>
+          <button
+            onClick={() => router.push("/")}
+            className="flex items-center gap-2.5 bg-transparent border-none cursor-pointer"
+          >
           <div
             className="flex items-center justify-center w-9 h-9 rounded-[10px] text-white text-base font-extrabold"
             style={{
@@ -313,6 +363,7 @@ export default function ReviewsPage() {
             Nerdy AI Tutor
           </span>
         </button>
+        </div>
         <span className="text-white/60 text-sm">All Reviews</span>
       </nav>
 
@@ -321,6 +372,87 @@ export default function ReviewsPage() {
         <h1 className="text-2xl font-bold text-white mb-8">
           Session Reviews
         </h1>
+
+        {/* Filter Controls */}
+        {!loading && !error && hasData && (
+          <div className="mb-8 flex flex-col gap-4">
+            {/* Subject Filter */}
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wider mb-2 block">
+                Subject
+              </span>
+              <div className="flex gap-2 flex-wrap" role="tablist" aria-label="Filter by subject">
+                <button
+                  role="tab"
+                  aria-selected={subjectFilter === null}
+                  onClick={() => setSubjectFilter(null)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium border-none cursor-pointer transition-all duration-200"
+                  style={{
+                    background: subjectFilter === null ? "#007AFF" : "rgba(255,255,255,0.06)",
+                    color: subjectFilter === null ? "#fff" : "#6a7f99",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  All
+                </button>
+                {uniqueSubjects.map((subject) => (
+                  <button
+                    key={subject}
+                    role="tab"
+                    aria-selected={subjectFilter === subject}
+                    onClick={() => setSubjectFilter(subject)}
+                    className="px-4 py-2 rounded-lg text-sm font-medium border-none cursor-pointer transition-all duration-200"
+                    style={{
+                      background: subjectFilter === subject ? "#007AFF" : "rgba(255,255,255,0.06)",
+                      color: subjectFilter === subject ? "#fff" : "#6a7f99",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    {subjectLabel(subject)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Grade Filter */}
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wider mb-2 block">
+                Grade
+              </span>
+              <div className="flex gap-2 flex-wrap" role="tablist" aria-label="Filter by grade">
+                <button
+                  role="tab"
+                  aria-selected={gradeFilter === null}
+                  onClick={() => setGradeFilter(null)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium border-none cursor-pointer transition-all duration-200"
+                  style={{
+                    background: gradeFilter === null ? "#007AFF" : "rgba(255,255,255,0.06)",
+                    color: gradeFilter === null ? "#fff" : "#6a7f99",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  All Grades
+                </button>
+                {uniqueGrades.map((grade) => (
+                  <button
+                    key={grade}
+                    role="tab"
+                    aria-selected={gradeFilter === grade}
+                    onClick={() => setGradeFilter(grade)}
+                    className="px-4 py-2 rounded-lg text-sm font-medium border-none cursor-pointer transition-all duration-200"
+                    style={{
+                      background: gradeFilter === grade ? "#007AFF" : "rgba(255,255,255,0.06)",
+                      color: gradeFilter === grade ? "#fff" : "#6a7f99",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    Grade {grade}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {loading && (
           <div className="text-center py-20">
@@ -335,7 +467,7 @@ export default function ReviewsPage() {
           </div>
         )}
 
-        {!loading && !error && grouped.size === 0 && (
+        {!loading && !error && !hasData && (
           <div className="text-center py-20">
             <p className="text-gray-400 text-sm mb-4">
               No completed sessions yet. Start a tutoring session to generate
@@ -350,8 +482,30 @@ export default function ReviewsPage() {
           </div>
         )}
 
+        {/* Empty state when filters match nothing */}
+        {!loading && !error && hasData && !hasFilteredResults && isFiltering && (
+          <div className="text-center py-20">
+            <p className="text-gray-400 text-sm mb-4">
+              No sessions match the selected filters. Try adjusting the subject
+              or grade filter.
+            </p>
+            <button
+              onClick={() => {
+                setSubjectFilter(null);
+                setGradeFilter(null);
+              }}
+              className="text-blue-400 text-sm hover:text-blue-300 transition-colors"
+            >
+              Clear Filters
+            </button>
+          </div>
+        )}
+
+        {/* Grouped display (subject = All) */}
         {!loading &&
           !error &&
+          hasFilteredResults &&
+          subjectFilter === null &&
           Array.from(grouped.entries()).map(([subject, sessions]) => (
             <section key={subject} className="mb-10">
               <h2 className="text-lg font-semibold text-white mb-4">
@@ -369,6 +523,23 @@ export default function ReviewsPage() {
               </div>
             </section>
           ))}
+
+        {/* Flat display (specific subject selected) */}
+        {!loading &&
+          !error &&
+          hasFilteredResults &&
+          subjectFilter !== null && (
+            <div className="flex flex-col gap-4">
+              {filteredSessions.map((data) => (
+                <SessionCard
+                  key={data.session.id}
+                  data={data}
+                  expandedSummaryId={expandedSummaryId}
+                  onExpandSummary={setExpandedSummaryId}
+                />
+              ))}
+            </div>
+          )}
       </main>
     </div>
   );

@@ -145,10 +145,11 @@ class TestSubjectSwitchMidSession:
     @pytest.mark.parametrize("subject", list(Subject))
     def test_router_recognizes_all_subjects(self, subject: Subject):
         """SubjectRouterAgent.select_subject handles all known subjects."""
-        from main import _resolve_agent
+        from main import _parse_room_name, _resolve_agent
 
         room_name = f"tutor-{subject.value}-12345"
-        agent = _resolve_agent(room_name)
+        subject_key, grade = _parse_room_name(room_name)
+        agent = _resolve_agent(subject_key, grade)
         # Should NOT be the router — should be a subject-specific agent
         assert type(agent).__name__ != "SubjectRouterAgent"
 

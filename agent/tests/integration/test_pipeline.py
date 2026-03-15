@@ -162,21 +162,24 @@ class TestSubjectHandoff:
         self, room_name: str, expected_type: str
     ):
         """Room name 'tutor-{subject}-{ts}' resolves to the matching tutor agent."""
-        from main import _resolve_agent
+        from main import _parse_room_name, _resolve_agent
 
-        agent = _resolve_agent(room_name)
+        subject_key, grade = _parse_room_name(room_name)
+        agent = _resolve_agent(subject_key, grade)
         assert type(agent).__name__ == expected_type
 
     def test_resolve_agent_falls_back_to_router(self):
         """Unknown subject in room name falls back to SubjectRouterAgent."""
-        from main import _resolve_agent
+        from main import _parse_room_name, _resolve_agent
 
-        agent = _resolve_agent("tutor-art-0000")
+        subject_key, grade = _parse_room_name("tutor-art-0000")
+        agent = _resolve_agent(subject_key, grade)
         assert type(agent).__name__ == "SubjectRouterAgent"
 
     def test_resolve_agent_malformed_room_name(self):
         """Completely unrecognized room name falls back to SubjectRouterAgent."""
-        from main import _resolve_agent
+        from main import _parse_room_name, _resolve_agent
 
-        agent = _resolve_agent("random-room")
+        subject_key, grade = _parse_room_name("random-room")
+        agent = _resolve_agent(subject_key, grade)
         assert type(agent).__name__ == "SubjectRouterAgent"

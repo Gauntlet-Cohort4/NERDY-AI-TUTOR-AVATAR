@@ -398,9 +398,15 @@ async def entrypoint(ctx) -> None:
         model=config.cartesia_model,
         voice=config.cartesia_voice_id,
         speed=1.0,
+        word_timestamps=False,
         # text_pacing disabled: Cartesia plugin's EOS packet sends only " "
         # with continue=False, which clips the final word when pacing buffers it.
         # See: https://github.com/livekit/agents/issues/4171
+        #
+        # word_timestamps disabled: With timestamps enabled, the SentenceTokenizer
+        # sets flush_on_chunk=True + max_buffer_delay_ms=0, causing Cartesia to
+        # flush audio immediately. The done signal arrives before the final audio
+        # chunk fully plays out through WebRTC, clipping the last word.
     )
 
     # Avatar — provider selected by AVATAR_PROVIDER env var
@@ -464,15 +470,6 @@ async def entrypoint(ctx) -> None:
 
     session.on("error", _on_session_error)
 
-    # Reset error counter on successful agent speech (proves the pipeline recovered)
-    def _on_agent_speech(*_args) -> None:
-        nonlocal _consecutive_errors
-        if _consecutive_errors > 0:
-            logger.debug("error_counter_reset", previous=_consecutive_errors)
-            _consecutive_errors = 0
-
-    session.on("agent_speech_committed", _on_agent_speech)
-
     # ── Provider-agnostic idle timeout ────────────────────────────────────
     # Disconnect the room after config.session_idle_timeout seconds of no
     # activity (no user speech AND no agent speech).  Works regardless of
@@ -501,19 +498,21 @@ async def entrypoint(ctx) -> None:
         await _end_db_session()
         await ctx.room.disconnect()
 
-    # Reset idle timer and error counter on any activity (user or agent speech)
+    # Reset idle timer on any activity (user or agent speech)
     def _on_activity(*_args) -> None:
+        _schedule_idle_disconnect()
+
+    # Reset error counter only on agent_speech_committed — a reliable signal
+    # that the pipeline is healthy (conversation_item_added fires for tool calls too)
+    def _on_agent_speech_committed(*_args) -> None:
         nonlocal _consecutive_errors
         if _consecutive_errors > 0:
-            logger.debug("error_counter_reset_on_activity", previous=_consecutive_errors)
+            logger.debug("error_counter_reset", previous=_consecutive_errors)
             _consecutive_errors = 0
         _schedule_idle_disconnect()
 
-    session.on("agent_speech_committed", _on_activity)
+    session.on("agent_speech_committed", _on_agent_speech_committed)
     session.on("conversation_item_added", _on_activity)
-
-    # Start the initial idle timer once the session begins
-    _schedule_idle_disconnect()
 
     # Conversation tracker — hooks session events for background summarization
     history = ConversationHistory(
@@ -583,6 +582,9 @@ async def entrypoint(ctx) -> None:
         room=ctx.room,
         agent=agent,
     )
+
+    # Start the initial idle timer now that the session is fully active
+    _schedule_idle_disconnect()
 
     # ── End session on disconnect ────────────────────────────────────────
     _session_ended = False

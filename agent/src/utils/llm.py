@@ -14,7 +14,8 @@ from groq import AsyncGroq
 
 # Module-level singletons — reused across calls to avoid repeated instantiation.
 _groq_client: AsyncGroq | None = None
-_anthropic_client: object | None = None
+_UNSET = object()
+_anthropic_client: object = _UNSET
 
 
 def extract_json(text: str) -> dict[str, Any]:
@@ -39,17 +40,19 @@ def get_anthropic_client():
     """Return a shared AsyncAnthropic client (reads ANTHROPIC_API_KEY from env).
 
     Returns None if the anthropic package is not installed or no key is set.
+    Uses _UNSET sentinel to distinguish "not yet initialized" from "unavailable".
     """
     global _anthropic_client
-    if _anthropic_client is None:
+    if _anthropic_client is _UNSET:
         try:
             import os
 
             from anthropic import AsyncAnthropic
 
             if not os.getenv("ANTHROPIC_API_KEY"):
+                _anthropic_client = None
                 return None
             _anthropic_client = AsyncAnthropic()
         except ImportError:
-            return None
+            _anthropic_client = None
     return _anthropic_client

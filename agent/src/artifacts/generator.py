@@ -366,7 +366,7 @@ async def generate_flash_cards(
 ) -> list[dict[str, Any]]:
     """Generate flash cards from recent session transcript turns.
 
-    Asks Groq to identify key terms/concepts discussed, then upserts
+    Asks the configured LLM to identify key terms/concepts discussed, then upserts
     each card into the database (deduplicating via ON CONFLICT).
 
     Returns the list of generated flash card dicts.

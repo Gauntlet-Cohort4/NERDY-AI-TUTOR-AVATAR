@@ -336,18 +336,10 @@ export default function ReviewsPage() {
           borderBottom: "1px solid rgba(255,255,255,0.06)",
         }}
       >
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push("/")}
-            className="flex items-center gap-1 bg-transparent border-none cursor-pointer text-blue-400 text-sm hover:text-blue-300"
-            aria-label="Back to Home"
-          >
-            <span>&larr;</span> Back
-          </button>
-          <button
-            onClick={() => router.push("/")}
-            className="flex items-center gap-2.5 bg-transparent border-none cursor-pointer"
-          >
+        <button
+          onClick={() => router.push("/")}
+          className="flex items-center gap-2.5 bg-transparent border-none cursor-pointer"
+        >
           <div
             className="flex items-center justify-center w-9 h-9 rounded-[10px] text-white text-base font-extrabold"
             style={{
@@ -363,12 +355,18 @@ export default function ReviewsPage() {
             Nerdy AI Tutor
           </span>
         </button>
-        </div>
         <span className="text-white/60 text-sm">All Reviews</span>
       </nav>
 
       {/* Content */}
       <main className="mx-auto px-6 py-10" style={{ maxWidth: 900 }}>
+        <button
+          onClick={() => router.push("/")}
+          className="flex items-center gap-1.5 bg-transparent border-none cursor-pointer text-blue-400 text-sm hover:text-blue-300 mb-6"
+          style={{ fontFamily: "inherit" }}
+        >
+          <span>&larr;</span> Back to Dashboard
+        </button>
         <h1 className="text-2xl font-bold text-white mb-8">
           Session Reviews
         </h1>

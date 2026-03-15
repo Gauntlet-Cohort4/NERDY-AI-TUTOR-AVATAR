@@ -453,6 +453,13 @@ export default function UploadPage() {
 
       {/* Content */}
       <div className="mx-auto px-6 py-12" style={{ maxWidth: 640 }}>
+        <button
+          onClick={() => router.push("/")}
+          className="flex items-center gap-1.5 bg-transparent border-none cursor-pointer text-blue-400 text-sm hover:text-blue-300 mb-6"
+          style={{ fontFamily: "inherit" }}
+        >
+          <span>&larr;</span> Back to Dashboard
+        </button>
         <h1 className="text-white text-2xl font-bold mb-2 text-center">
           Upload Worksheet
         </h1>

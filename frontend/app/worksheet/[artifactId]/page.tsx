@@ -308,10 +308,19 @@ export default function WorksheetPage() {
         }}
       >
         <button
-          onClick={() => router.back()}
-          className="flex items-center gap-2 bg-transparent border-none cursor-pointer text-blue-400 text-sm hover:text-blue-300"
+          onClick={() => router.push("/")}
+          className="flex items-center gap-2.5 bg-transparent border-none cursor-pointer"
+          aria-label="Go to home page"
         >
-          <span>&larr;</span> Back
+          <div
+            className="flex items-center justify-center w-9 h-9 rounded-[10px] text-white text-base font-extrabold"
+            style={{ background: "linear-gradient(135deg, #007AFF, #0056b3)" }}
+          >
+            N
+          </div>
+          <span className="text-white font-bold text-lg" style={{ letterSpacing: "-0.02em" }}>
+            Nerdy AI Tutor
+          </span>
         </button>
         {!loading && !error && (
           <span className="text-white/60 text-sm">
@@ -322,6 +331,13 @@ export default function WorksheetPage() {
 
       {/* Content */}
       <main className="mx-auto px-6 py-10" style={{ maxWidth: 700 }}>
+        <button
+          onClick={() => router.push("/")}
+          className="flex items-center gap-1.5 bg-transparent border-none cursor-pointer text-blue-400 text-sm hover:text-blue-300 mb-6"
+          style={{ fontFamily: "inherit" }}
+        >
+          <span>&larr;</span> Back to Dashboard
+        </button>
         {loading && (
           <div className="text-center py-20">
             <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />

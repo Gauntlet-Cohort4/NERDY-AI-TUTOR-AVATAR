@@ -492,19 +492,11 @@ export default function FlashCardsPage() {
           borderBottom: "1px solid rgba(255,255,255,0.06)",
         }}
       >
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push("/")}
-            className="flex items-center gap-1 bg-transparent border-none cursor-pointer text-blue-400 text-sm hover:text-blue-300"
-            aria-label="Back to Home"
-          >
-            <span>&larr;</span> Back
-          </button>
-          <button
-            onClick={() => router.push("/")}
-            className="flex items-center gap-2.5 bg-transparent border-none cursor-pointer"
-            aria-label="Go to home page"
-          >
+        <button
+          onClick={() => router.push("/")}
+          className="flex items-center gap-2.5 bg-transparent border-none cursor-pointer"
+          aria-label="Go to home page"
+        >
           <div
             className="flex items-center justify-center w-9 h-9 rounded-[10px] text-white text-base font-extrabold"
             style={{ background: "linear-gradient(135deg, #007AFF, #0056b3)" }}
@@ -515,7 +507,6 @@ export default function FlashCardsPage() {
             Nerdy AI Tutor
           </span>
         </button>
-        </div>
         <div className="flex items-center gap-4">
           <button
             onClick={() => router.push("/upload")}
@@ -529,6 +520,13 @@ export default function FlashCardsPage() {
 
       {/* Content */}
       <div className="mx-auto px-6 py-10" style={{ maxWidth: 720 }}>
+        <button
+          onClick={() => router.push("/")}
+          className="flex items-center gap-1.5 bg-transparent border-none cursor-pointer text-blue-400 text-sm hover:text-blue-300 mb-6"
+          style={{ fontFamily: "inherit" }}
+        >
+          <span>&larr;</span> Back to Dashboard
+        </button>
         <h1 className="text-white text-2xl font-bold mb-2 text-center">
           Flash Cards
         </h1>

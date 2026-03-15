@@ -185,7 +185,7 @@ function getGradeBand(gradeId: string): "middle" | "hs_lower" | "hs_upper" | nul
   return null;
 }
 
-function isGradeBandActive(gradeId: string): boolean {
+function isSupportedGrade(gradeId: string): boolean {
   return getGradeBand(gradeId) === "middle";
 }
 
@@ -263,13 +263,14 @@ function Navbar() {
         >
           All Reviews
         </button>
-        <span
-          className="text-white text-sm font-medium px-5 py-2 rounded-lg"
-          style={{ border: "1.5px solid rgba(255,255,255,0.2)" }}
-          aria-hidden="true"
+        <button
+          disabled
+          aria-label="Demo user"
+          className="text-white/70 text-sm font-medium px-5 py-2 rounded-lg"
+          style={{ border: "1.5px solid rgba(255,255,255,0.15)", cursor: "default" }}
         >
-          Sign In
-        </span>
+          User — Demo
+        </button>
       </div>
     </nav>
   );
@@ -483,15 +484,13 @@ function Footer() {
       </span>
       <div className="flex gap-5">
         {(["Terms", "Privacy", "Help"] as const).map((link) => (
-          <a
+          <span
             key={link}
-            href="#"
-            className="text-[13px] no-underline transition-colors duration-200 hover:text-[#007AFF]"
+            className="text-[13px]"
             style={{ color: "#506480" }}
-            onClick={(e) => e.preventDefault()}
           >
             {link}
-          </a>
+          </span>
         ))}
       </div>
     </footer>
@@ -541,7 +540,7 @@ function FlashCardSection({
               className="flex-1 min-w-[200px] max-w-[280px] bg-gray-800/40 border border-gray-700 rounded-lg p-4"
             >
               <p className="text-sm font-medium text-white capitalize mb-2">
-                {subject.replace("_", " ")}
+                {subject.replaceAll("_", " ")}
               </p>
               <p className="text-xs text-gray-500 mb-2">{total} cards</p>
               <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden flex">
@@ -631,7 +630,7 @@ export default function Home() {
     [selectedGrade],
   );
 
-  const isDemoGrade = selectedGrade ? !isGradeBandActive(selectedGrade) : false;
+  const isDemoGrade = selectedGrade ? !isSupportedGrade(selectedGrade) : false;
   const canStartSession = Boolean(selectedSubject && selectedGrade && !isDemoGrade);
 
   // Fetch sessions and flash card stats on mount
@@ -642,13 +641,14 @@ export default function Home() {
       return;
     }
 
+    const validUserId: string = userId;
     let cancelled = false;
 
     async function fetchDashboardData() {
       try {
         const [sessionsData, statsData] = await Promise.allSettled([
-          listSessions(userId!),
-          getFlashCardStats(userId!),
+          listSessions(validUserId),
+          getFlashCardStats(validUserId),
         ]);
 
         if (!cancelled) {

@@ -37,10 +37,10 @@ class SimliAvatarAdapter:
         max_session_length: int = 600,
         max_idle_time: int = 30,
     ):
-        self.api_key = api_key
-        self.face_id = face_id
-        self.max_session_length = max_session_length
-        self.max_idle_time = max_idle_time
+        self._api_key = api_key
+        self._face_id = face_id
+        self._max_session_length = max_session_length
+        self._max_idle_time = max_idle_time
         self._session: Optional[object] = None
 
     async def start(self, session, room) -> None:
@@ -49,18 +49,18 @@ class SimliAvatarAdapter:
             from livekit.plugins.simli import AvatarSession, SimliConfig
 
             simli_config = SimliConfig(
-                api_key=self.api_key,
-                face_id=self.face_id,
-                max_session_length=self.max_session_length,
-                max_idle_time=self.max_idle_time,
+                api_key=self._api_key,
+                face_id=self._face_id,
+                max_session_length=self._max_session_length,
+                max_idle_time=self._max_idle_time,
             )
             self._session = AvatarSession(simli_config=simli_config)
             await self._session.start(session, room=room)
             logger.info(
                 "avatar_started",
                 provider="simli",
-                face_id=self.face_id,
-                max_session_length=self.max_session_length,
+                face_id=self._face_id,
+                max_session_length=self._max_session_length,
             )
         except ImportError:
             logger.warning(
@@ -100,7 +100,7 @@ class HedraAvatarAdapter:
     """
 
     def __init__(self, avatar_id: str):
-        self.avatar_id = avatar_id
+        self._avatar_id = avatar_id
         self._session: Optional[object] = None
 
     async def start(self, session, room) -> None:
@@ -108,12 +108,12 @@ class HedraAvatarAdapter:
         try:
             from livekit.plugins.hedra import AvatarSession
 
-            self._session = AvatarSession(avatar_id=self.avatar_id)
+            self._session = AvatarSession(avatar_id=self._avatar_id)
             await self._session.start(session, room=room)
             logger.info(
                 "avatar_started",
                 provider="hedra",
-                avatar_id=self.avatar_id,
+                avatar_id=self._avatar_id,
             )
         except ImportError:
             logger.warning(
@@ -153,8 +153,8 @@ class BeyAvatarAdapter:
     """
 
     def __init__(self, api_key: str, avatar_id: str):
-        self.api_key = api_key
-        self.avatar_id = avatar_id
+        self._api_key = api_key
+        self._avatar_id = avatar_id
         self._session: Optional[object] = None
 
     async def start(self, session, room) -> None:
@@ -163,14 +163,14 @@ class BeyAvatarAdapter:
             from livekit.plugins.bey import AvatarSession
 
             self._session = AvatarSession(
-                api_key=self.api_key,
-                avatar_id=self.avatar_id,
+                api_key=self._api_key,
+                avatar_id=self._avatar_id,
             )
             await self._session.start(session, room=room)
             logger.info(
                 "avatar_started",
                 provider="beyondpresence",
-                avatar_id=self.avatar_id,
+                avatar_id=self._avatar_id,
             )
         except ImportError:
             logger.warning(

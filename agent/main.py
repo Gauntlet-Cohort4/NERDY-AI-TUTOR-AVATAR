@@ -84,6 +84,8 @@ class _HealthHandler(BaseHTTPRequestHandler):
         from src.api.router import handle_post
 
         body = self._read_body()
+        if body is None:
+            return
         result = handle_post(self.path, body, self)
         if result is not None:
             resp_body, status, content_type = result
@@ -97,6 +99,8 @@ class _HealthHandler(BaseHTTPRequestHandler):
         from src.api.router import handle_patch
 
         body = self._read_body()
+        if body is None:
+            return
         result = handle_patch(self.path, body, self)
         if result is not None:
             resp_body, status, content_type = result
@@ -130,11 +134,16 @@ class _HealthHandler(BaseHTTPRequestHandler):
 
     _MAX_BODY_BYTES = 15 * 1024 * 1024  # 15 MB (includes multipart overhead)
 
-    def _read_body(self) -> bytes:
-        """Read the request body, rejecting oversized payloads."""
+    def _read_body(self) -> bytes | None:
+        """Read the request body, rejecting oversized payloads.
+
+        Returns None if a 413 response was already sent (caller must return).
+        """
         length = int(self.headers.get("Content-Length", 0))
         if length > self._MAX_BODY_BYTES:
-            return b""  # will be caught downstream
+            self.send_response(413)
+            self.end_headers()
+            return None
         return self.rfile.read(length) if length > 0 else b""
 
     def log_message(self, format, *args) -> None:
@@ -350,23 +359,46 @@ async def entrypoint(ctx) -> None:
     # Handle typed text input from the frontend (accessibility alternative to mic).
     # The frontend publishes UTF-8 text on the "chat_input" data channel topic.
     # We feed it into the agent session as user input via generate_reply().
+    _MAX_CHAT_INPUT_BYTES = 4096
+
     @ctx.room.on("data_received")
     def _on_data_received(data_packet) -> None:
         topic = getattr(data_packet, "topic", None)
         if topic != "chat_input":
             return
         try:
+            import asyncio
+
             raw = data_packet.data
+            if isinstance(raw, (bytes, bytearray)) and len(raw) > _MAX_CHAT_INPUT_BYTES:
+                logger.warning(
+                    "chat_input_too_large",
+                    session_id=session_id,
+                    byte_length=len(raw),
+                    max_bytes=_MAX_CHAT_INPUT_BYTES,
+                )
+                return
             text = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
             text = text.strip()
             if not text:
                 return
             logger.info("text_input_received", session_id=session_id, length=len(text))
-            import asyncio
-
-            asyncio.ensure_future(session.generate_reply(user_input=text))
-        except Exception:
-            logger.warning("text_input_handling_failed", session_id=session_id, exc_info=True)
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            if loop is not None:
+                loop.create_task(session.generate_reply(user_input=text))
+            else:
+                logger.warning("no_event_loop_for_chat_input", session_id=session_id)
+        except Exception as exc:
+            error = PipelineError(
+                stage=PipelineStage.SESSION,
+                severity=ErrorSeverity.DEGRADED,
+                message=f"Text input handling failed: {exc}",
+                original_exception=exc,
+            )
+            handle_pipeline_error(error)
 
     # Initial greeting is triggered by the agent's on_enter() hook,
     # which the framework calls once the session activity is fully ready.

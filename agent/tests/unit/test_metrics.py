@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.metrics import _METRICS_TOPIC, MetricsCollector
-from tests.conftest import _make_eou_event, _make_stt_event, _send_full_turn, _make_llm_event, _make_tts_event
+from tests.conftest import _make_eou_event, _make_stt_event, _send_full_turn
 
 
 class TestMetricsCollectorInitialState:

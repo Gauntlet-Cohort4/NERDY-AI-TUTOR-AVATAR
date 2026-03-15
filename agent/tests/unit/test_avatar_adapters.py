@@ -17,26 +17,26 @@ from src.config import AppConfig
 class TestSimliAvatarAdapterInit:
     def test_stores_api_key(self):
         adapter = SimliAvatarAdapter(api_key="key", face_id="face")
-        assert adapter.api_key == "key"
+        assert adapter._api_key == "key"
 
     def test_stores_face_id(self):
         adapter = SimliAvatarAdapter(api_key="key", face_id="face")
-        assert adapter.face_id == "face"
+        assert adapter._face_id == "face"
 
     def test_default_max_session_length(self):
         adapter = SimliAvatarAdapter(api_key="key", face_id="face")
-        assert adapter.max_session_length == 600
+        assert adapter._max_session_length == 600
 
     def test_default_max_idle_time(self):
         adapter = SimliAvatarAdapter(api_key="key", face_id="face")
-        assert adapter.max_idle_time == 30
+        assert adapter._max_idle_time == 30
 
     def test_custom_limits(self):
         adapter = SimliAvatarAdapter(
             api_key="k", face_id="f", max_session_length=1800, max_idle_time=120
         )
-        assert adapter.max_session_length == 1800
-        assert adapter.max_idle_time == 120
+        assert adapter._max_session_length == 1800
+        assert adapter._max_idle_time == 120
 
 
 class TestSimliAvatarAdapterStart:
@@ -46,7 +46,7 @@ class TestSimliAvatarAdapterStart:
             api_key=mock_config.simli_api_key,
             face_id="test-face",
         )
-        assert adapter.api_key == mock_config.simli_api_key
+        assert adapter._api_key == mock_config.simli_api_key
 
     @pytest.mark.asyncio
     async def test_start_logs_event(self, mock_config):
@@ -54,7 +54,7 @@ class TestSimliAvatarAdapterStart:
             api_key=mock_config.simli_api_key,
             face_id="test-face",
         )
-        assert adapter.face_id == "test-face"
+        assert adapter._face_id == "test-face"
 
 
 class TestSimliAvatarAdapterClose:
@@ -77,7 +77,7 @@ class TestSimliAvatarAdapterClose:
 class TestHedraAvatarAdapterInit:
     def test_stores_avatar_id(self):
         adapter = HedraAvatarAdapter(avatar_id="avatar-123")
-        assert adapter.avatar_id == "avatar-123"
+        assert adapter._avatar_id == "avatar-123"
 
     def test_session_initially_none(self):
         adapter = HedraAvatarAdapter(avatar_id="avatar-123")
@@ -104,11 +104,11 @@ class TestHedraAvatarAdapterClose:
 class TestBeyAvatarAdapterInit:
     def test_stores_api_key(self):
         adapter = BeyAvatarAdapter(api_key="bey-key", avatar_id="bey-avatar")
-        assert adapter.api_key == "bey-key"
+        assert adapter._api_key == "bey-key"
 
     def test_stores_avatar_id(self):
         adapter = BeyAvatarAdapter(api_key="bey-key", avatar_id="bey-avatar")
-        assert adapter.avatar_id == "bey-avatar"
+        assert adapter._avatar_id == "bey-avatar"
 
     def test_session_initially_none(self):
         adapter = BeyAvatarAdapter(api_key="bey-key", avatar_id="bey-avatar")
@@ -139,8 +139,8 @@ class TestCreateAvatar:
         )
         adapter = create_avatar(config)
         assert isinstance(adapter, SimliAvatarAdapter)
-        assert adapter.api_key == config.simli_api_key
-        assert adapter.face_id == config.simli_face_id
+        assert adapter._api_key == config.simli_api_key
+        assert adapter._face_id == config.simli_face_id
 
     def test_creates_hedra_adapter(self, mock_config):
         config = AppConfig(
@@ -148,7 +148,7 @@ class TestCreateAvatar:
         )
         adapter = create_avatar(config)
         assert isinstance(adapter, HedraAvatarAdapter)
-        assert adapter.avatar_id == config.hedra_avatar_id
+        assert adapter._avatar_id == config.hedra_avatar_id
 
     def test_creates_bey_adapter(self, mock_config):
         config = AppConfig(
@@ -161,8 +161,8 @@ class TestCreateAvatar:
         )
         adapter = create_avatar(config)
         assert isinstance(adapter, BeyAvatarAdapter)
-        assert adapter.api_key == "bey-key-123"
-        assert adapter.avatar_id == "bey-avatar-456"
+        assert adapter._api_key == "bey-key-123"
+        assert adapter._avatar_id == "bey-avatar-456"
 
     def test_unknown_provider_raises(self, mock_config):
         config = AppConfig(

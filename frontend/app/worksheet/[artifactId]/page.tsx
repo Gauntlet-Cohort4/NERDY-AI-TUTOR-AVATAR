@@ -62,8 +62,9 @@ function MultipleChoiceInput({
       {options.map((option, i) => {
         const letter = String.fromCharCode(65 + i);
         const isSelected = selected === letter;
-        const isCorrect = submitted && letter === correctAnswer;
-        const isWrong = submitted && isSelected && letter !== correctAnswer;
+        const correctLetter = correctAnswer.trim().charAt(0).toUpperCase();
+        const isCorrect = submitted && letter === correctLetter;
+        const isWrong = submitted && isSelected && letter !== correctLetter;
 
         let borderClass = "border-gray-600";
         if (isCorrect) borderClass = "border-green-400";
@@ -237,9 +238,11 @@ export default function WorksheetPage() {
   const handleSubmitAnswer = useCallback(() => {
     if (!currentProblem || !currentAnswer.trim()) return;
 
-    const isCorrect =
-      currentAnswer.trim().toLowerCase() ===
-      currentProblem.answer.trim().toLowerCase();
+    // The LLM stores answers like "C) Sunlight" — extract the leading letter
+    // for comparison with the user's selected letter.
+    const answerLetter = currentProblem.answer.trim().charAt(0).toUpperCase();
+    const userLetter = currentAnswer.trim().toUpperCase();
+    const isCorrect = userLetter === answerLetter;
 
     const newAnswers = new Map(answers);
     newAnswers.set(currentIndex, {
@@ -364,17 +367,6 @@ export default function WorksheetPage() {
               <div className="flex items-center gap-3 mb-4">
                 <span className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300">
                   {currentIndex + 1} / {totalProblems}
-                </span>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded ${
-                    currentProblem.difficulty === "easy"
-                      ? "bg-green-900/40 text-green-400"
-                      : currentProblem.difficulty === "medium"
-                        ? "bg-amber-900/40 text-amber-400"
-                        : "bg-red-900/40 text-red-400"
-                  }`}
-                >
-                  {currentProblem.difficulty}
                 </span>
               </div>
 

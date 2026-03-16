@@ -63,6 +63,7 @@ function SessionContent() {
   const [metricsVisible, setMetricsVisible] = useState(false);
   const [transcriptEntries, setTranscriptEntries] = useState<readonly TranscriptEntry[]>([]);
   const [transcriptVisible, setTranscriptVisible] = useState(true);
+  const [agentVolume, setAgentVolume] = useState(0.8);
   const [isConnected, setIsConnected] = useState(false);
   const [whiteboardPayload, setWhiteboardPayload] = useState<WhiteboardPayload | null>(null);
   const [isWhiteboardActive, setIsWhiteboardActive] = useState(false);
@@ -216,7 +217,7 @@ function SessionContent() {
       video={false}
       onDisconnected={handleEndSession}
     >
-      <RoomAudioRenderer />
+      <RoomAudioRenderer volume={agentVolume} />
       <SessionInner
         subject={subject}
         onConnectionStateChange={handleConnectionStateChange}
@@ -260,6 +261,8 @@ function SessionContent() {
               onToggleMetrics={handleToggleMetrics}
               transcriptVisible={transcriptVisible}
               onToggleTranscript={handleToggleTranscript}
+              volume={agentVolume}
+              onVolumeChange={setAgentVolume}
             />
           </footer>
         </main>

@@ -26,6 +26,11 @@ from livekit.agents import Agent, AgentSession
 from livekit.plugins import cartesia, deepgram, groq, silero, simli  # noqa: F401
 
 try:
+    from livekit.plugins import anthropic as anthropic_plugin  # noqa: F401
+except ImportError:
+    anthropic_plugin = None
+
+try:
     from livekit.plugins import hedra  # noqa: F401
 except ImportError:
     hedra = None  # Hedra plugin optional; only needed when AVATAR_PROVIDER=hedra
@@ -384,20 +389,28 @@ async def entrypoint(ctx) -> None:
         model=config.deepgram_model,
         language=config.deepgram_language,
     )
-    llm = groq.LLM(
-        model=config.groq_model,
-        temperature=config.groq_temperature,
-    )
-    # WORKAROUND: groq.LLM inherits OpenAILLM._strict_tool_schema but doesn't
-    # expose it as a constructor arg. Llama models reject OpenAI strict tool schemas
-    # (required + empty properties). Pinned: livekit-agents~=1.4.4 in requirements.txt.
-    # Track: https://github.com/livekit/agents — remove once groq plugin exposes this.
-    llm._strict_tool_schema = False
+    if config.tutor_llm_provider == "anthropic" and anthropic_plugin is not None:
+        llm = anthropic_plugin.LLM(
+            model=config.tutor_anthropic_model,
+            temperature=config.groq_temperature,
+        )
+        logger.info("using_anthropic_llm", model=config.tutor_anthropic_model)
+    else:
+        llm = groq.LLM(
+            model=config.groq_model,
+            temperature=config.groq_temperature,
+        )
+        # WORKAROUND: groq.LLM inherits OpenAILLM._strict_tool_schema but doesn't
+        # expose it as a constructor arg. Llama models reject OpenAI strict tool schemas
+        # (required + empty properties). Pinned: livekit-agents~=1.4.4 in requirements.txt.
+        # Track: https://github.com/livekit/agents — remove once groq plugin exposes this.
+        llm._strict_tool_schema = False
+        logger.info("using_groq_llm", model=config.groq_model)
 
     tts = cartesia.TTS(
         model=config.cartesia_model,
         voice=config.cartesia_voice_id,
-        speed=1.0,
+        speed=0.95,
         word_timestamps=False,
         # text_pacing disabled: Cartesia plugin's EOS packet sends only " "
         # with continue=False, which clips the final word when pacing buffers it.
@@ -407,6 +420,10 @@ async def entrypoint(ctx) -> None:
         # sets flush_on_chunk=True + max_buffer_delay_ms=0, causing Cartesia to
         # flush audio immediately. The done signal arrives before the final audio
         # chunk fully plays out through WebRTC, clipping the last word.
+        #
+        # speed=0.95: Slight slowdown adds ~50ms of tail room per utterance,
+        # giving the last audio packet time to transit WebRTC before "done"
+        # signals close the track.
     )
 
     # Avatar — provider selected by AVATAR_PROVIDER env var
@@ -424,7 +441,8 @@ async def entrypoint(ctx) -> None:
             activation_threshold=0.65,
             min_speech_duration=0.1,
         ),
-        min_endpointing_delay=0.8,  # Prevent last-word cutoff (default 0.5 too aggressive)
+        min_endpointing_delay=1.0,  # Prevent last-word cutoff (default 0.5 too aggressive)
+        min_interruption_duration=0.8,  # Require 800ms of user speech before interrupting agent
     )
 
     session.on("metrics_collected", metrics.on_metrics)
@@ -502,17 +520,36 @@ async def entrypoint(ctx) -> None:
     def _on_activity(*_args) -> None:
         _schedule_idle_disconnect()
 
-    # Reset error counter only on agent_speech_committed — a reliable signal
-    # that the pipeline is healthy (conversation_item_added fires for tool calls too)
-    def _on_agent_speech_committed(*_args) -> None:
+    # Reset error counter when agent successfully speaks, and publish
+    # the full transcript text as a fallback for the frontend.
+    # The TranscriptSynchronizer can desync with Beyond Presence's
+    # playback_finished signals, truncating the transcript display.
+    # This data channel message lets the frontend patch truncated bubbles.
+    def _on_conversation_item_added(ev) -> None:
         nonlocal _consecutive_errors
-        if _consecutive_errors > 0:
-            logger.debug("error_counter_reset", previous=_consecutive_errors)
-            _consecutive_errors = 0
+        item = ev.item
+        if getattr(item, "role", None) == "assistant":
+            # Reset error counter — assistant message means pipeline is healthy
+            if _consecutive_errors > 0:
+                logger.debug("error_counter_reset", previous=_consecutive_errors)
+                _consecutive_errors = 0
+
+            # Publish complete text via data channel for transcript fallback
+            text = getattr(item, "text_content", None)
+            if text:
+                try:
+                    payload = json.dumps({"text": text}).encode("utf-8")
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(
+                        ctx.room.local_participant.publish_data(
+                            payload, reliable=True, topic="transcript_complete",
+                        )
+                    )
+                except Exception:
+                    logger.debug("transcript_complete_publish_failed", exc_info=True)
         _schedule_idle_disconnect()
 
-    session.on("agent_speech_committed", _on_agent_speech_committed)
-    session.on("conversation_item_added", _on_activity)
+    session.on("conversation_item_added", _on_conversation_item_added)
 
     # Conversation tracker — hooks session events for background summarization
     history = ConversationHistory(
@@ -596,8 +633,13 @@ async def entrypoint(ctx) -> None:
         # Safe: no await between guard and flag — asyncio cooperative scheduling
         _session_ended = True
         try:
-            # Flush pending tracker writes before ending session
+            # Flush pending tracker writes before ending session.
+            # After flush, wait briefly for cross-loop DB writes to commit —
+            # _CrossLoopPool dispatches to the DB loop asynchronously, so
+            # flush() returning only means the LiveKit-side futures resolved,
+            # not that PostgreSQL has committed the rows yet.
             await tracker.flush()
+            await asyncio.sleep(1)
 
             from src.db.sessions import end_session
 
@@ -778,33 +820,51 @@ async def entrypoint(ctx) -> None:
     logger.info("session_started", session_id=room_name)
 
 
-if __name__ == "__main__":
+def _init_db() -> None:
+    """Initialize the DB pool and event loop. Shared by main + worker processes."""
     import asyncio as _asyncio
 
+    from src.api.router import set_db, set_event_loop
+    from src.db import Database
+
+    _config = AppConfig.from_env()
+    if not _config.database_url:
+        return
+
+    _db = Database()
+    _loop = _asyncio.new_event_loop()
+    _loop.run_until_complete(_db.connect(_config.database_url))
+    set_db(_db)
+    set_event_loop(_loop)
+
+    _loop_thread = threading.Thread(target=_loop.run_forever, daemon=True)
+    _loop_thread.start()
+
+    logger.info("database_initialized")
+
+
+def _prewarm(proc) -> None:
+    """Called in each worker process before entrypoint runs.
+
+    LiveKit agents v1.4+ uses PROCESS executor by default — each job runs in
+    a forked process. Module-level state from __main__ (DB pool, LLM loop)
+    is NOT inherited, so we must reinitialize here.
+    """
+    setup_logging()
+    _init_db()
+    _start_llm_loop()
+    logger.info("worker_process_prewarmed", pid=os.getpid())
+
+
+if __name__ == "__main__":
     from livekit.agents import WorkerOptions, cli
 
     setup_logging()
 
-    # Initialize DB if configured — pool is shared via api.router module
-    _config = AppConfig.from_env()
-    if _config.database_url:
-        from src.api.router import set_db, set_event_loop
-        from src.db import Database
+    # Initialize DB in main process (for HTTP API server)
+    _init_db()
 
-        _db = Database()
-        _loop = _asyncio.new_event_loop()
-
-        _loop.run_until_complete(_db.connect(_config.database_url))
-        set_db(_db)
-        set_event_loop(_loop)
-
-        # Run the event loop in a background thread so coroutines can execute
-        _loop_thread = threading.Thread(target=_loop.run_forever, daemon=True)
-        _loop_thread.start()
-
-        logger.info("database_initialized_for_api")
-
-    # Start dedicated LLM event loop — keeps Groq API calls off the DB loop
+    # Start dedicated LLM event loop in main process
     _start_llm_loop()
 
     _start_health_server()
@@ -813,5 +873,6 @@ if __name__ == "__main__":
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,
+            prewarm_fnc=_prewarm,
         ),
     )

@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useState } from "react";
 import { useTrackToggle } from "@livekit/components-react";
 import { Track } from "livekit-client";
 import { createLogger } from "@/lib/logger";
@@ -7,13 +8,15 @@ import { createLogger } from "@/lib/logger";
 const logger = createLogger("SessionControls");
 
 interface SessionControlsProps {
-  isConnected: boolean;
-  onStart: () => void;
-  onEnd: () => void;
-  metricsVisible: boolean;
-  onToggleMetrics: () => void;
-  transcriptVisible: boolean;
-  onToggleTranscript: () => void;
+  readonly isConnected: boolean;
+  readonly onStart: () => void;
+  readonly onEnd: () => void;
+  readonly metricsVisible: boolean;
+  readonly onToggleMetrics: () => void;
+  readonly transcriptVisible: boolean;
+  readonly onToggleTranscript: () => void;
+  readonly volume: number;
+  readonly onVolumeChange: (v: number) => void;
 }
 
 function MicToggle() {
@@ -53,6 +56,74 @@ function MicToggle() {
   );
 }
 
+function VolumeSlider({
+  volume,
+  onVolumeChange,
+}: {
+  readonly volume: number;
+  readonly onVolumeChange: (v: number) => void;
+}) {
+  const [premuteVolume, setPremuteVolume] = useState(volume);
+  const isMuted = volume === 0;
+
+  const handleMuteToggle = useCallback(() => {
+    if (isMuted) {
+      onVolumeChange(premuteVolume > 0 ? premuteVolume : 0.8);
+    } else {
+      setPremuteVolume(volume);
+      onVolumeChange(0);
+    }
+  }, [isMuted, volume, premuteVolume, onVolumeChange]);
+
+  const handleSliderChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const v = parseFloat(e.target.value);
+      onVolumeChange(v);
+      if (v > 0) setPremuteVolume(v);
+    },
+    [onVolumeChange],
+  );
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        onClick={handleMuteToggle}
+        className="p-2 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+        title={isMuted ? "Unmute AI voice" : "Mute AI voice"}
+      >
+        {isMuted ? (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+            <path d="M10.047 3.062a.75.75 0 0 1 .453.688v12.5a.75.75 0 0 1-1.264.546L5.203 13H2.667a.75.75 0 0 1-.7-.48A6.985 6.985 0 0 1 1.5 10c0-.85.151-1.665.429-2.42a.75.75 0 0 1 .7-.58h2.564l4.033-3.796a.75.75 0 0 1 .811-.142Z" />
+            <path d="m13.22 7.22 2-2a.75.75 0 1 1 1.06 1.06l-2 2 2 2a.75.75 0 1 1-1.06 1.06l-2-2-2 2a.75.75 0 0 1-1.06-1.06l2-2-2-2a.75.75 0 0 1 1.06-1.06l2 2Z" />
+          </svg>
+        ) : volume < 0.5 ? (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+            <path d="M10.047 3.062a.75.75 0 0 1 .453.688v12.5a.75.75 0 0 1-1.264.546L5.203 13H2.667a.75.75 0 0 1-.7-.48A6.985 6.985 0 0 1 1.5 10c0-.85.151-1.665.429-2.42a.75.75 0 0 1 .7-.58h2.564l4.033-3.796a.75.75 0 0 1 .811-.142Z" />
+            <path d="M14.017 7.19a.75.75 0 0 1 1.044.193 4.004 4.004 0 0 1 0 4.435.75.75 0 1 1-1.237-.85 2.504 2.504 0 0 0 0-2.735.75.75 0 0 1 .193-1.044Z" />
+          </svg>
+        ) : (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+            <path d="M10.047 3.062a.75.75 0 0 1 .453.688v12.5a.75.75 0 0 1-1.264.546L5.203 13H2.667a.75.75 0 0 1-.7-.48A6.985 6.985 0 0 1 1.5 10c0-.85.151-1.665.429-2.42a.75.75 0 0 1 .7-.58h2.564l4.033-3.796a.75.75 0 0 1 .811-.142Z" />
+            <path d="M14.017 7.19a.75.75 0 0 1 1.044.193 4.004 4.004 0 0 1 0 4.435.75.75 0 1 1-1.237-.85 2.504 2.504 0 0 0 0-2.735.75.75 0 0 1 .193-1.044Z" />
+            <path d="M15.807 4.882a.75.75 0 0 1 1.06-.04 8.02 8.02 0 0 1 0 11.12.75.75 0 0 1-1.1-1.02 6.52 6.52 0 0 0 0-9.06.75.75 0 0 1 .04-1Z" />
+          </svg>
+        )}
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.05}
+        value={volume}
+        onChange={handleSliderChange}
+        className="w-20 h-1.5 accent-blue-500 cursor-pointer"
+        title={`AI voice volume: ${Math.round(volume * 100)}%`}
+        aria-label="AI voice volume"
+      />
+    </div>
+  );
+}
+
 export default function SessionControls({
   isConnected,
   onStart,
@@ -61,9 +132,11 @@ export default function SessionControls({
   onToggleMetrics,
   transcriptVisible,
   onToggleTranscript,
+  volume,
+  onVolumeChange,
 }: SessionControlsProps) {
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-2 items-center">
       {!isConnected ? (
         <button
           onClick={onStart}
@@ -74,6 +147,7 @@ export default function SessionControls({
       ) : (
         <>
           <MicToggle />
+          <VolumeSlider volume={volume} onVolumeChange={onVolumeChange} />
           <button
             onClick={onEnd}
             className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"

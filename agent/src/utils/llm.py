@@ -19,10 +19,38 @@ _anthropic_client: object = _UNSET
 
 
 def extract_json(text: str) -> dict[str, Any]:
-    """Strip markdown fences and parse JSON safely."""
-    stripped = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.MULTILINE)
-    stripped = re.sub(r"```\s*$", "", stripped.strip(), flags=re.MULTILINE)
-    return json.loads(stripped)
+    """Strip markdown fences and parse JSON safely.
+
+    Handles: bare JSON, ```json ... ```, ``` ... ```, and JSON embedded
+    in surrounding prose.  Falls back to locating the first { or [ block.
+    """
+    # 1. Try to extract content between code fences
+    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)```", text, re.DOTALL)
+    candidate = fence_match.group(1).strip() if fence_match else text.strip()
+
+    # 2. Try parsing the candidate directly
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        pass
+
+    # 3. Fall back: find the first { ... } or [ ... ] block
+    brace = candidate.find("{")
+    bracket = candidate.find("[")
+    if brace == -1 and bracket == -1:
+        raise ValueError("No JSON object found in text")
+    start = min(p for p in (brace, bracket) if p >= 0)
+    open_char = candidate[start]
+    close_char = "}" if open_char == "{" else "]"
+    depth = 0
+    for i in range(start, len(candidate)):
+        if candidate[i] == open_char:
+            depth += 1
+        elif candidate[i] == close_char:
+            depth -= 1
+            if depth == 0:
+                return json.loads(candidate[start : i + 1])
+    raise ValueError("Unbalanced braces/brackets in JSON")
 
 
 def get_groq_client() -> AsyncGroq:

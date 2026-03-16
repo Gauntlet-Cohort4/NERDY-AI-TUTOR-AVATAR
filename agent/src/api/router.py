@@ -82,9 +82,27 @@ def _json_serializer(obj: Any) -> Any:
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
+def _parse_jsonb_strings(obj: Any) -> Any:
+    """Pre-parse stringified JSONB fields returned by asyncpg.
+
+    asyncpg returns ``jsonb`` columns as raw JSON strings instead of dicts.
+    Without this step, ``json.dumps`` would double-encode them.
+    """
+    if isinstance(obj, dict):
+        return {k: _parse_jsonb_strings(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_parse_jsonb_strings(item) for item in obj]
+    if isinstance(obj, str) and obj.startswith(("{", "[")):
+        try:
+            return json.loads(obj)
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return obj
+
+
 def _json_response(data: Any, status: int = 200) -> tuple[bytes, int, str]:
     """Return (body_bytes, status_code, content_type)."""
-    body = json.dumps(data, default=_json_serializer).encode()
+    body = json.dumps(_parse_jsonb_strings(data), default=_json_serializer).encode()
     return body, status, "application/json"
 
 

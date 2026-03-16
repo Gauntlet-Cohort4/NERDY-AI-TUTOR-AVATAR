@@ -45,11 +45,17 @@ const HIGH_SCHOOL: readonly Grade[] = [
 
 const ALL_GRADES: readonly Grade[] = [...MIDDLE_SCHOOL, ...HIGH_SCHOOL];
 
-// Grade-band subject maps
-const MIDDLE_SCHOOL_SUBJECTS: readonly SubjectConfig[] = [
+// Grade-specific subject maps (demo-ready)
+const GRADE6_SUBJECTS: readonly SubjectConfig[] = [
   { name: "Fractions", subject: "math", topic: "Numerators, Denominators & More", icon: "calc", color: "#6F42C1", bg: "rgba(111,66,193,0.08)" },
+];
+
+const GRADE7_SUBJECTS: readonly SubjectConfig[] = [
   { name: "Basic Biology", subject: "biology", topic: "Plants & Photosynthesis", icon: "leaf", color: "#28A745", bg: "rgba(40,167,69,0.08)" },
-  { name: "Earth Science", subject: "earth_science", topic: "Rocks, Tectonics & Erosion", icon: "globe", color: "#17A2B8", bg: "rgba(23,162,184,0.08)" },
+];
+
+const GRADE8_SUBJECTS: readonly SubjectConfig[] = [
+  { name: "Intro Algebra", subject: "intro_algebra", topic: "Variables, Equations & Graphs", icon: "calc", color: "#6F42C1", bg: "rgba(111,66,193,0.08)" },
 ];
 
 const HIGH_SCHOOL_LOWER_SUBJECTS: readonly SubjectConfig[] = [
@@ -190,12 +196,18 @@ function isSupportedGrade(gradeId: string): boolean {
 }
 
 function getSubjectsForGrade(gradeId: string): readonly SubjectConfig[] {
-  const band = getGradeBand(gradeId);
-  switch (band) {
-    case "middle": return MIDDLE_SCHOOL_SUBJECTS;
-    case "hs_lower": return HIGH_SCHOOL_LOWER_SUBJECTS;
-    case "hs_upper": return HIGH_SCHOOL_UPPER_SUBJECTS;
-    default: return [];
+  switch (gradeId) {
+    case "grade6": return GRADE6_SUBJECTS;
+    case "grade7": return GRADE7_SUBJECTS;
+    case "grade8": return GRADE8_SUBJECTS;
+    default: {
+      const band = getGradeBand(gradeId);
+      switch (band) {
+        case "hs_lower": return HIGH_SCHOOL_LOWER_SUBJECTS;
+        case "hs_upper": return HIGH_SCHOOL_UPPER_SUBJECTS;
+        default: return [];
+      }
+    }
   }
 }
 
@@ -557,37 +569,6 @@ function FlashCardSection({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Session Badge Helper
-// ---------------------------------------------------------------------------
-
-function SubjectSessionBadge({
-  sessions,
-}: {
-  readonly sessions: readonly Session[];
-}) {
-  const completedCount = sessions.filter((s) => s.status === "completed").length;
-  const activeCount = sessions.filter((s) => s.status === "active").length;
-
-  if (completedCount === 0 && activeCount === 0) return null;
-
-  return (
-    <div className="flex items-center gap-2 mt-1">
-      {completedCount > 0 && (
-        <span className="flex items-center gap-1 text-[11px] text-green-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-          {completedCount} review{completedCount !== 1 ? "s" : ""}
-        </span>
-      )}
-      {activeCount > 0 && (
-        <span className="flex items-center gap-1 text-[11px] text-amber-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-          generating
-        </span>
-      )}
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Main Page
@@ -670,13 +651,6 @@ export default function Home() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const sessionsForSubject = useCallback(
-    (subject: Subject): readonly Session[] => {
-      return sessions.filter((s) => s.subject === subject);
-    },
-    [sessions],
-  );
-
   // Reset subject animation when grade changes
   useEffect(() => {
     if (selectedGrade) {
@@ -688,9 +662,18 @@ export default function Home() {
 
   const handleGradeClick = useCallback((id: string) => {
     setSelectedSubject(null);
-    setSelectedGrade((prev) => (prev === id ? null : id));
+    if (selectedGrade === id) {
+      setSelectedGrade(null);
+    } else {
+      setSelectedGrade(id);
+      // Auto-select when there's only one subject for this grade
+      const gradeSubjects = getSubjectsForGrade(id);
+      if (gradeSubjects.length === 1) {
+        setSelectedSubject(gradeSubjects[0].subject);
+      }
+    }
     logger.debug("grade_clicked", { gradeId: id });
-  }, []);
+  }, [selectedGrade]);
 
   const handleSubjectClick = useCallback((subject: Subject) => {
     setSelectedSubject(subject);
@@ -755,17 +738,6 @@ export default function Home() {
       {/* Step 2 — Subject Selection (shown when grade selected) */}
       {selectedGrade && (
         <section className="mx-auto" style={{ padding: "0 20px 60px", maxWidth: 900 }}>
-          {/* Back button */}
-          <div className="text-center mb-4">
-            <button
-              onClick={handleBack}
-              className="bg-transparent border-none cursor-pointer font-medium inline-flex items-center gap-1.5"
-              style={{ color: "#007AFF", fontSize: 13, fontFamily: "inherit" }}
-            >
-              <span className="text-base">&larr;</span> Back to Grade Levels
-            </button>
-          </div>
-
           <p
             className="text-center uppercase font-semibold mb-6"
             style={{ color: "#506480", fontSize: 12, letterSpacing: "0.15em" }}
@@ -845,9 +817,6 @@ export default function Home() {
                   <div className="font-normal" style={{ fontSize: 13, color: isDemoGrade ? "#4a5568" : "#6a7f99" }}>
                     {subj.topic}
                   </div>
-                  {!isDemoGrade && (
-                    <SubjectSessionBadge sessions={sessionsForSubject(subj.subject)} />
-                  )}
                 </button>
               );
             })}

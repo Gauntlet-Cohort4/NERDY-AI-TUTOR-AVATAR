@@ -81,6 +81,34 @@ export default function SessionInner({
   );
   useDataChannel("whiteboard", handleWhiteboard);
 
+  // Transcript fallback: Beyond Presence can desync the TranscriptSynchronizer,
+  // truncating the text stream. The agent publishes the complete response text on
+  // the "transcript_complete" data channel. We patch the latest agent bubble if
+  // the complete text is longer than what useTranscriptions() delivered.
+  const latestAgentBubbleId = useRef<string | null>(null);
+
+  const handleTranscriptComplete = useCallback(
+    (message: { payload: Uint8Array }) => {
+      try {
+        const decoded = new TextDecoder().decode(message.payload);
+        const { text } = JSON.parse(decoded) as { text: string };
+        const bubbleId = latestAgentBubbleId.current;
+        if (bubbleId && text) {
+          onTranscriptUpdate({
+            id: bubbleId,
+            role: "agent",
+            text,
+            timestamp: Date.now(),
+          });
+        }
+      } catch {
+        // Ignore malformed payloads
+      }
+    },
+    [onTranscriptUpdate],
+  );
+  useDataChannel("transcript_complete", handleTranscriptComplete);
+
   // Capture live transcriptions (both user STT and agent responses).
   // Agent speech: each response gets its own streamInfo.id — one bubble per reply.
   // User STT: Deepgram sends many small segments, each with a unique stream ID.
@@ -116,6 +144,7 @@ export default function SessionInner({
       if (!bubbleId) {
         if (isAgent) {
           bubbleId = segmentKey;
+          latestAgentBubbleId.current = bubbleId;
           if (lastRoleRef.current === "user") {
             lastRoleRef.current = "agent";
           }

@@ -34,11 +34,17 @@ class AppConfig:
     deepgram_model: str = "nova-3"
     deepgram_language: str = "en-US"
 
+    # Real-time tutoring LLM — "groq" (default) or "anthropic"
+    tutor_llm_provider: str = "groq"
+
     # Groq (real-time tutoring LLM)
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
     groq_temperature: float = 0.7
     groq_max_tokens: int = 150
+
+    # Anthropic (real-time tutoring LLM — alternative)
+    tutor_anthropic_model: str = "claude-haiku-4-5-20251001"
 
     # Artifact generation LLM (summaries, worksheets, cheat sheets, flash cards)
     artifact_llm_provider: str = "anthropic"  # "anthropic" or "groq"
@@ -125,6 +131,7 @@ class AppConfig:
             deepgram_api_key=os.environ["DEEPGRAM_API_KEY"],
             deepgram_model=os.getenv("DEEPGRAM_MODEL", "nova-3"),
             groq_api_key=os.environ["GROQ_API_KEY"],
+            tutor_llm_provider=os.getenv("TUTOR_LLM_PROVIDER", "groq").lower(),
             groq_model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
             artifact_llm_provider=os.getenv("ARTIFACT_LLM_PROVIDER", "anthropic").lower(),
             artifact_llm_model=os.getenv("ARTIFACT_LLM_MODEL", ""),

@@ -34,6 +34,7 @@ class IntroAlgebraTutorAgent(SubjectTutorAgent):
         logger.info("intro_algebra_greeting_triggered")
         self._update_stt_keyterms()
         self.session.generate_reply(
-            instructions="Greet the student warmly (1 sentence). Then ask what specific "
-            "topic within Intro Algebra they'd like help with today. Keep it to 2 sentences total."
+            instructions="Greet the student warmly (1 sentence). Then tell them you're "
+            "going to work on algebra together — variables, equations, and solving for "
+            "unknowns — and ask if they're ready to dive in. Keep it to 2 sentences total."
         )

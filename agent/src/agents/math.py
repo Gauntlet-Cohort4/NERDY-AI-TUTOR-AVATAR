@@ -34,6 +34,7 @@ class MathTutorAgent(SubjectTutorAgent):
         logger.info("math_greeting_triggered")
         self._update_stt_keyterms()
         self.session.generate_reply(
-            instructions="Greet the student warmly (1 sentence). Then ask what specific "
-            "topic within Math they'd like help with today. Keep it to 2 sentences total."
+            instructions="Greet the student warmly (1 sentence). Then tell them you're "
+            "going to work on fractions together, and ask a simple starter question like "
+            "whether they've worked with fractions before. Keep it to 2 sentences total."
         )

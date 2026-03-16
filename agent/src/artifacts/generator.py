@@ -243,7 +243,7 @@ Create 8-12 problems. Format as JSON:
 
 Mix: ~30% easy, ~50% medium, ~20% hard. Include LaTeX for math. Valid JSON only."""
 
-    content_text = await _llm_generate(prompt, artifact_llm_provider, artifact_llm_model, max_tokens=2000)
+    content_text = await _llm_generate(prompt, artifact_llm_provider, artifact_llm_model, max_tokens=4000)
     try:
         content_json: dict[str, Any] = extract_json(content_text)
     except (json.JSONDecodeError, ValueError):
@@ -304,7 +304,7 @@ async def generate_review_quiz(
 Session summary: {session.get('summary_cache', 'No summary available.')}
 Key exchanges: {_format_turns(recent_turns)}
 
-Create 8-12 questions. Format as JSON:
+Create exactly 10 questions. Format as JSON:
 {{
   "questions": [{{
     "id": "q1",
@@ -323,7 +323,7 @@ Create 8-12 questions. Format as JSON:
 
 Mix difficulty. Valid JSON only."""
 
-    content_text = await _llm_generate(prompt, artifact_llm_provider, artifact_llm_model, max_tokens=2000)
+    content_text = await _llm_generate(prompt, artifact_llm_provider, artifact_llm_model, max_tokens=4000)
     try:
         content_json: dict[str, Any] = extract_json(content_text)
     except (json.JSONDecodeError, ValueError):

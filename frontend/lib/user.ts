@@ -3,6 +3,10 @@ const USER_NAME_KEY = "nerdy_tutor_user_name";
 const DEFAULT_USER_NAME = "Student";
 const MAX_NAME_LENGTH = 100;
 
+// Demo user ID — must match _DEMO_USER_ID in agent/main.py.
+// TODO: Replace with real user auth when multi-user support is added.
+const DEMO_USER_ID = "00000000-0000-0000-0000-000000000001";
+
 /**
  * Get or create a stable user ID stored in localStorage.
  * Returns null during SSR — callers must guard against this.
@@ -10,12 +14,9 @@ const MAX_NAME_LENGTH = 100;
 export function getUserId(): string | null {
   if (typeof window === "undefined") return null;
 
-  let userId = localStorage.getItem(USER_ID_KEY);
-  if (!userId) {
-    userId = crypto.randomUUID();
-    localStorage.setItem(USER_ID_KEY, userId);
-  }
-  return userId;
+  // For demo, always use the hardcoded demo user so sessions/artifacts match.
+  localStorage.setItem(USER_ID_KEY, DEMO_USER_ID);
+  return DEMO_USER_ID;
 }
 
 /**

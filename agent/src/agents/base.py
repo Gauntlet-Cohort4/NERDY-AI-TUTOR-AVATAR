@@ -70,7 +70,7 @@ class SubjectTutorAgent(Agent):
         latex: str,
         title: str = "",
     ) -> str:
-        """Display a math equation on the whiteboard.
+        """Display a math equation on the whiteboard. After calling, do NOT repeat or rephrase what you just said — wait for the student to respond.
 
         Args:
             latex: LaTeX string to render (e.g., '\\frac{1}{2}')
@@ -87,7 +87,7 @@ class SubjectTutorAgent(Agent):
         ctx: RunContext,
         topic_key: str,
     ) -> str:
-        """Show a pre-cached diagram or image on the whiteboard.
+        """Show a pre-cached diagram or image on the whiteboard. After calling, do NOT repeat or rephrase what you just said — wait for the student to respond.
 
         Args:
             topic_key: Topic identifier (e.g., 'cell_structure', 'newtons_third_law')
@@ -120,7 +120,7 @@ class SubjectTutorAgent(Agent):
         template_id: str,
         params: str,
     ) -> str:
-        """Show an interactive diagram template with specific parameters.
+        """Show an interactive diagram template with specific parameters. After calling, do NOT repeat or rephrase what you just said — wait for the student to respond.
 
         Args:
             template_id: Template name (e.g., 'number_line', 'coordinate_plane')
@@ -148,7 +148,7 @@ class SubjectTutorAgent(Agent):
         description: str,
         topic_key: str = "",
     ) -> str:
-        """Generate an image for a topic not in the cache. Takes 3-10 seconds.
+        """Generate an image for a topic not in the cache. Takes 3-10 seconds. After calling, do NOT repeat or rephrase what you just said — wait for the student to respond.
 
         Args:
             description: What the image should depict

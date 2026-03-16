@@ -34,6 +34,7 @@ class BiologyTutorAgent(SubjectTutorAgent):
         logger.info("biology_greeting_triggered")
         self._update_stt_keyterms()
         self.session.generate_reply(
-            instructions="Greet the student warmly (1 sentence). Then ask what specific "
-            "topic within Biology they'd like help with today. Keep it to 2 sentences total."
+            instructions="Greet the student warmly (1 sentence). Then tell them you're "
+            "ready to explore plants and photosynthesis together, and ask what they know "
+            "about how plants make their food. Keep it to 2 sentences total."
         )

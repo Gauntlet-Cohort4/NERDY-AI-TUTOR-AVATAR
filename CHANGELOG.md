@@ -5,6 +5,27 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [Phase 9] - 2026-03-16
+
+### Added
+- `DECISIONS.md` — comprehensive architectural and design decision log
+- `OPTIMIZATION.md` — per-stage pipeline optimization strategies with reasoning
+- `LIMITATIONS.md` — known limitations, failure modes, and edge cases
+- `COST_ANALYSIS.md` — infrastructure cost analysis and scaling projections (100 to 100K users)
+- `agent/src/artifacts/pdf_renderer.py` — on-demand PDF rendering using fpdf2 with Unicode font support
+- `frontend/app/reviews/[sessionId]/flash-cards/page.tsx` — dedicated flash cards study page with mastery tracking
+- Auto-generate flash cards when visiting a session that has none
+- react-markdown + @tailwindcss/typography for rendered markdown summaries
+- KaTeX rendering for LaTeX math formulas in cheat sheets
+
+### Changed
+- Replaced WeasyPrint with fpdf2 for PDF generation (fixes `transform` AttributeError in WeasyPrint 62.3)
+- Summary and Cheat Sheet buttons on reviews list now navigate to session detail page (removed inline expand)
+- Cheat Sheet link scrolls to `#cheat-sheet` anchor on session detail page
+- Flash Cards button links directly to `/reviews/[sessionId]/flash-cards`
+- Updated README with latency benchmarks, documentation links, updated project structure, and cost analysis
+- Updated avatar provider documentation to reflect Beyond Presence as primary provider
+
 ## [Phase 5] - 2026-03-09
 
 ### Added

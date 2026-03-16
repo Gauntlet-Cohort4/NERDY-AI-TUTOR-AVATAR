@@ -2,24 +2,32 @@
 
 A real-time AI video avatar tutor that uses Socratic teaching methods to help students learn biology, math, physics, and more through natural conversation with an animated avatar.
 
-All five implementation phases are complete. The system is fully wired end-to-end: LiveKit WebRTC transport, Deepgram STT, Groq LLM with Socratic subject agents, Cartesia TTS, Simli avatar rendering, and a Next.js 14 frontend.
+All implementation phases are complete. The system is fully wired end-to-end: LiveKit WebRTC transport, Deepgram STT, Groq LLM with Socratic subject agents, Cartesia TTS, configurable avatar rendering (Beyond Presence, Simli, Hedra), a Next.js 14 frontend with session reviews, flash cards, worksheets, and PDF export.
 
 ## Architecture
 
 ```
-Student Mic → WebRTC/LiveKit → Deepgram STT → Groq LLM → Cartesia TTS → Simli Avatar → WebRTC → Student Screen
+Student Mic → WebRTC/LiveKit → Deepgram STT → Groq LLM → Cartesia TTS → Avatar → WebRTC → Student Screen
 ```
 
 All pipeline stages stream concurrently — tokens stream into TTS which streams audio into the avatar renderer.
 
-| Pipeline Stage | Expected | Actual |
-|---|---|---|
-| Speech-to-text (Deepgram Nova-3) | ~150ms | Waiting for data |
-| LLM time-to-first-token (Groq) | ~200ms | Waiting for data |
-| TTS first audio byte (Cartesia) | ~150ms | Waiting for data |
-| Avatar rendering (Simli Trinity) | ~100ms | Waiting for data |
-| Network + overhead (WebRTC) | ~50ms | Waiting for data |
-| **Total end-to-end** | **~500ms** | **Waiting for data** |
+## Latency Benchmarks
+
+**Target:** <500ms first avatar frame, <1s maximum end-to-end.
+
+Once the avatar session is loaded, the per-stage latency measured during live tutoring sessions:
+
+| Pipeline Stage | Target | Avg (Measured) | Current (Peak) |
+|---|---|---|---|
+| Speech-to-Text (Deepgram Nova-3) | <200ms | **98ms** | 197ms |
+| LLM Time-to-First-Token (Groq) | <300ms | **717ms** | 510ms |
+| TTS First Audio Byte (Cartesia) | <150ms | **234ms** | 257ms |
+| **Total pipeline** | **<500ms** | **~1,049ms** | ~964ms |
+
+LLM TTFT is the dominant contributor to end-to-end latency. The average exceeds target due to longer Socratic responses requiring more generation time. Current (single-turn) measurements often come in under target. STT and TTS consistently meet their individual targets.
+
+*Note: Avatar rendering latency is handled by the avatar provider's pipeline and is not measured separately — it overlaps with audio playback via WebRTC streaming. Session startup (avatar initialization) takes 8-15 seconds across all tested providers.*
 
 ## Prerequisites
 
@@ -69,10 +77,14 @@ See [.env.example](.env.example) for all required and optional variables with de
 | `DEEPGRAM_API_KEY` | Yes | Deepgram STT API key |
 | `GROQ_API_KEY` | Yes | Groq LLM API key |
 | `CARTESIA_API_KEY` | Yes | Cartesia TTS API key |
-| `SIMLI_API_KEY` | Yes | Simli avatar API key |
+| `AVATAR_PROVIDER` | No | Avatar provider: `beyondpresence`, `simli`, or `hedra` (default: simli) |
+| `BEY_API_KEY` | Conditional | Beyond Presence API key (required if AVATAR_PROVIDER=beyondpresence) |
+| `BEY_AVATAR_ID` | Conditional | Beyond Presence avatar ID |
+| `SIMLI_API_KEY` | Conditional | Simli avatar API key (required if AVATAR_PROVIDER=simli) |
+| `HEDRA_API_KEY` | Conditional | Hedra API key (required if AVATAR_PROVIDER=hedra) |
 | `GROQ_MODEL` | No | LLM model (default: llama-3.3-70b-versatile) |
-| `CARTESIA_VOICE_ID` | No | TTS voice (default: Katie) |
-| `SIMLI_FACE_ID` | No | Avatar face ID |
+| `CARTESIA_VOICE_ID` | No | TTS voice ID |
+| `DATABASE_URL` | No | PostgreSQL connection string for session persistence |
 | `LOG_LEVEL` | No | Logging level (default: INFO) |
 
 ## Running Tests
@@ -97,24 +109,33 @@ bash scripts/lint.sh
 
 ```
 nerdy-ai-tutor/
-├── agent/                    # Python — LiveKit Agent backend
-│   ├── main.py               # Entrypoint: starts LiveKit AgentServer
+├── agent/                        # Python — LiveKit Agent backend
+│   ├── main.py                   # Entrypoint: AgentServer + pipeline wiring
 │   ├── src/
-│   │   ├── config.py         # Central config loader
-│   │   ├── logging_setup.py  # Structured logging (structlog)
-│   │   ├── errors.py         # Error types + Socratic fallbacks
-│   │   ├── types.py          # Shared types and protocols
-│   │   ├── metrics.py        # Latency metrics collector
-│   │   ├── agents/           # Subject-specific tutor agents
-│   │   ├── education/        # Prompts, subjects, history
-│   │   └── avatar/           # Avatar renderer abstraction
+│   │   ├── config.py             # Central config with fail-fast validation
+│   │   ├── metrics.py            # Per-turn latency collector + data channel publishing
+│   │   ├── agents/               # Subject-specific tutor agents + router
+│   │   ├── education/            # Socratic prompts, subjects, history
+│   │   ├── avatar/               # Avatar renderer protocol (Simli, Hedra, Beyond Presence)
+│   │   ├── artifacts/            # PDF renderer, artifact generator
+│   │   ├── api/                  # HTTP API router for sessions, artifacts, flash cards
+│   │   └── db/                   # Database access layer (asyncpg)
 │   └── tests/
-├── frontend/                 # Next.js frontend
-│   ├── app/                  # Pages and API routes
-│   ├── components/           # React components
-│   └── lib/                  # Utilities and types
-├── scripts/                  # Dev utilities
-└── docker-compose.yml        # Full stack deployment
+├── frontend/                     # Next.js 14 frontend
+│   ├── app/
+│   │   ├── session/              # Live tutoring session page
+│   │   ├── reviews/              # Session review list + detail + flash cards
+│   │   ├── worksheet/            # Interactive worksheet page
+│   │   └── api/                  # Token and health endpoints
+│   ├── components/               # Avatar, latency overlay, whiteboard, controls
+│   └── lib/                      # API client, types, logger
+├── migrations/                   # PostgreSQL schema migrations
+├── scripts/                      # Dev utilities
+├── DECISIONS.md                  # Architectural decision log
+├── OPTIMIZATION.md               # Pipeline optimization strategies
+├── LIMITATIONS.md                # Known limitations & failure modes
+├── COST_ANALYSIS.md              # Infrastructure cost analysis
+└── docker-compose.yml            # Full stack (agent + frontend + PostgreSQL)
 ```
 
 ## Docker
@@ -128,29 +149,39 @@ docker compose build agent
 docker compose build frontend
 ```
 
-## Deferred Work
+## Documentation
 
-- **Playwright E2E tests.** Frontend end-to-end tests via Playwright are deferred. The test infrastructure (Playwright config, CI job) is not yet set up. Backend unit and integration tests provide current coverage.
+| Document | Description |
+|---|---|
+| [DECISIONS.md](DECISIONS.md) | Architectural & design decision log with rationale and tradeoffs |
+| [OPTIMIZATION.md](OPTIMIZATION.md) | Per-stage pipeline optimization strategies with reasoning |
+| [LIMITATIONS.md](LIMITATIONS.md) | Known limitations, failure modes, and edge cases |
+| [COST_ANALYSIS.md](COST_ANALYSIS.md) | Infrastructure cost analysis and scaling projections (100 to 100K users) |
+| [CLAUDE.md](CLAUDE.md) | Project-level instructions for Claude Code |
 
 ## Known Limitations
 
-- **Single concurrent session per agent instance.** Each agent process handles one LiveKit room at a time. Horizontal scaling requires multiple agent instances.
-- **English only.** Deepgram Nova-3 STT and Cartesia TTS are configured for English. The system prompts and keyterm lists are English-only.
-- **Fixed subject set.** Only Biology, Math, and Physics are available. Adding a new subject requires a new tutor agent, system prompt, and subject config entry.
-- **Simli avatar session length limits.** Simli imposes per-session duration caps. Long tutoring sessions may require reconnection logic (not currently implemented).
-- **Groq rate limits.** The Groq free tier enforces requests-per-minute and tokens-per-minute limits. High-frequency usage may hit throttling.
-- **No persistent conversation history.** Conversation context is held in memory for the duration of a session and discarded when the session ends. There is no cross-session persistence.
+Key limitations (see [LIMITATIONS.md](LIMITATIONS.md) for full details):
+
+- **Session startup time.** Avatar initialization takes 8-15 seconds across all providers (LiveKit + avatar warm-up).
+- **Connection recovery.** Choppy connections may drop the avatar stream; no automatic reconnection for the rendering pipeline.
+- **LLM tool calling.** Llama 3.3 70B sometimes misformats tool calls; Anthropic Haiku is more reliable but costlier.
+- **English only.** STT, TTS, and system prompts are English-only.
+- **Single concurrent session per agent.** Horizontal scaling requires multiple agent instances.
+- **No authentication.** Uses a hardcoded demo user ID; production requires an auth layer.
 
 ## Cost Analysis
 
-Estimated per-API costs for running the tutor. All figures are approximate and subject to change -- check each provider's pricing page for current rates.
+Estimated cost per 30-minute session (80 turns). See [COST_ANALYSIS.md](COST_ANALYSIS.md) for full breakdown.
 
-| Service | Pricing Model | Estimated Cost | Notes |
-|---|---|---|---|
-| Deepgram (STT) | Per minute of audio | ~$0.0043/min (Nova-3, pay-as-you-go) | $200 free credit on signup |
-| Groq (LLM) | Per token | Free tier available; paid ~$0.59/M input, $0.79/M output (Llama 3.3 70B) | Free tier has rate limits |
-| Cartesia (TTS) | Per character | ~$0.85 per 1M characters (Sonic) | Usage-based after free tier |
-| Simli (Avatar) | Per minute of video | Free tier: 50 min/month + $10 credit | Paid plans for higher volume |
-| LiveKit (Transport) | Per participant-minute | Cloud free tier available; ~$0.004/participant-min after | Self-hosted option eliminates this cost |
+| Service | Cost/Session | Notes |
+|---|---|---|
+| Deepgram STT | $0.23 | Streaming at $0.0077/min |
+| Groq LLM | $0.03 | Llama 3.3 70B ($0.59/$0.79 per M tokens) |
+| Cartesia TTS | $0.30 | ~6K characters per session |
+| Avatar (Beyond Presence) | $1.50 | $0.05/min |
+| LiveKit Cloud | $0.90 | Agent + video participant |
+| Artifact generation | $0.08 | Claude Sonnet for summaries/worksheets |
+| **Total** | **~$3.04** | Avatar + transport = 79% of cost |
 
-A typical 10-minute tutoring session uses roughly: 10 min STT, 1-2K LLM tokens, 3-5K TTS characters, and 10 min avatar rendering. Most development and light usage fits comfortably within free tiers.
+**Scaling:** At 1,000 daily users with volume discounts: ~$55-70K/month. At 100,000 users with self-hosted LiveKit + enterprise pricing: ~$25-45/user/month. See [COST_ANALYSIS.md](COST_ANALYSIS.md) for details.

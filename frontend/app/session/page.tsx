@@ -225,9 +225,10 @@ function SessionContent() {
         onTranscriptUpdate={handleTranscriptUpdate}
         onWhiteboardUpdate={handleWhiteboardUpdate}
         onSendMessageReady={handleSendMessageReady}
+        onAgentLeft={handleEndSession}
       />
       <div className="flex min-h-screen bg-gray-950 text-white">
-        <main className="flex flex-1 flex-col">
+        <main className="flex flex-1 flex-col min-w-0">
           <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
             <div>
               <h1 className="text-xl font-bold">{SUBJECT_LABELS[subject]} Tutor</h1>
@@ -235,18 +236,30 @@ function SessionContent() {
             </div>
             <ConnectionStatus state={connectionState} />
           </header>
-          <div className="flex-1 flex items-center justify-center p-6">
-            {isWhiteboardActive ? (
-              <div className="w-full max-w-4xl h-full">
-                <WhiteboardCanvas payload={whiteboardPayload} />
+
+          {isWhiteboardActive ? (
+            /* ── Whiteboard-active layout ─────────────────────────── */
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* Whiteboard takes the main area */}
+              <div className="flex-1 flex items-center justify-center p-6 min-h-0">
+                <div className="w-full max-w-5xl h-full">
+                  <WhiteboardCanvas payload={whiteboardPayload} />
+                </div>
               </div>
-            ) : (
+              {/* Mini avatar pinned to bottom-right of main area */}
+              <div className="flex justify-end px-6 pb-2">
+                <AvatarPiP isActive />
+              </div>
+            </div>
+          ) : (
+            /* ── Normal layout — full-size avatar ─────────────────── */
+            <div className="flex-1 flex items-center justify-center p-6">
               <div className="w-full max-w-3xl">
                 <AvatarDisplay />
               </div>
-            )}
-          </div>
-          <AvatarPiP isActive={isWhiteboardActive} />
+            </div>
+          )}
+
           <LatencyOverlay
             metrics={latestMetrics}
             averages={metricsAverages}

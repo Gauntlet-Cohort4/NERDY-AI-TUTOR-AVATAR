@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { getUserId } from "@/lib/user";
-import { listSessions, listArtifacts, downloadArtifactPdf } from "@/lib/api";
-import type { Session, Artifact, Subject } from "@/lib/types";
+import { listSessions, listArtifacts, listFlashCards, downloadArtifactPdf } from "@/lib/api";
+import type { Session, Artifact, FlashCard, Subject } from "@/lib/types";
 import { createLogger } from "@/lib/logger";
 
 const logger = createLogger("ReviewsPage");
@@ -16,6 +16,7 @@ const logger = createLogger("ReviewsPage");
 interface SessionWithArtifacts {
   readonly session: Session;
   readonly artifacts: readonly Artifact[];
+  readonly flashCards: readonly FlashCard[];
 }
 
 type GroupedSessions = ReadonlyMap<Subject, readonly SessionWithArtifacts[]>;
@@ -69,13 +70,9 @@ function groupBySubject(
 function ArtifactRow({
   artifact,
   sessionId,
-  onExpandSummary,
-  expandedSummaryId,
 }: {
   readonly artifact: Artifact;
   readonly sessionId: string;
-  readonly onExpandSummary: (id: string | null) => void;
-  readonly expandedSummaryId: string | null;
 }) {
   const router = useRouter();
   const [downloading, setDownloading] = useState(false);
@@ -98,86 +95,105 @@ function ArtifactRow({
     }
   }, [artifact.id, artifact.title]);
 
-  const isSummaryExpanded = expandedSummaryId === artifact.id;
-
-  const cj = artifact.content_json;
-  const summaryText =
-    artifact.artifact_type === "summary" && typeof cj === "object" && cj !== null && typeof (cj as Record<string, unknown>).text === "string"
-      ? ((cj as Record<string, unknown>).text as string)
-      : "";
-
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-gray-300 capitalize min-w-[100px]">
-          {artifact.artifact_type.replace("_", " ")}
-        </span>
-        <span className="text-xs text-gray-500">{artifact.title}</span>
-        <div className="ml-auto flex gap-2">
-          {artifact.artifact_type === "summary" && (
-            <button
-              onClick={() =>
-                onExpandSummary(isSummaryExpanded ? null : artifact.id)
-              }
-              className="text-xs px-3 py-1 rounded bg-gray-700 text-blue-400 hover:bg-gray-600 transition-colors"
-            >
-              {isSummaryExpanded ? "Collapse" : "Summary"}
-            </button>
-          )}
-          {artifact.artifact_type === "cheat_sheet" && (
+    <div className="flex items-center gap-3">
+      <span className="text-sm text-gray-300 capitalize min-w-[100px]">
+        {artifact.artifact_type.replace("_", " ")}
+      </span>
+      <span className="text-xs text-gray-500">{artifact.title}</span>
+      <div className="ml-auto flex gap-2">
+        {artifact.artifact_type === "summary" && (
+          <>
             <button
               onClick={() => router.push(`/reviews/${sessionId}`)}
               className="text-xs px-3 py-1 rounded bg-gray-700 text-blue-400 hover:bg-gray-600 transition-colors"
             >
+              Summary
+            </button>
+            <button
+              onClick={handleDownloadPdf}
+              disabled={downloading}
+              className="text-xs px-3 py-1 rounded bg-gray-700 text-amber-400 hover:bg-gray-600 transition-colors disabled:opacity-50"
+            >
+              {downloading ? "..." : "PDF"}
+            </button>
+          </>
+        )}
+        {artifact.artifact_type === "cheat_sheet" && (
+          <>
+            <button
+              onClick={() => router.push(`/reviews/${sessionId}#cheat-sheet`)}
+              className="text-xs px-3 py-1 rounded bg-gray-700 text-blue-400 hover:bg-gray-600 transition-colors"
+            >
               Cheat Sheet
             </button>
-          )}
-          {artifact.artifact_type === "worksheet" && (
-            <>
-              <button
-                onClick={() => router.push(`/worksheet/${artifact.id}`)}
-                className="text-xs px-3 py-1 rounded bg-gray-700 text-green-400 hover:bg-gray-600 transition-colors"
-              >
-                Practice
-              </button>
-              <button
-                onClick={handleDownloadPdf}
-                disabled={downloading}
-                className="text-xs px-3 py-1 rounded bg-gray-700 text-amber-400 hover:bg-gray-600 transition-colors disabled:opacity-50"
-              >
-                {downloading ? "..." : "PDF"}
-              </button>
-            </>
-          )}
-          {artifact.artifact_type === "review_quiz" && (
             <button
-              onClick={() => router.push(`/review-quiz/${sessionId}`)}
-              className="text-xs px-3 py-1 rounded bg-gray-700 text-purple-400 hover:bg-gray-600 transition-colors"
+              onClick={handleDownloadPdf}
+              disabled={downloading}
+              className="text-xs px-3 py-1 rounded bg-gray-700 text-amber-400 hover:bg-gray-600 transition-colors disabled:opacity-50"
             >
-              Review Quiz
+              {downloading ? "..." : "PDF"}
             </button>
-          )}
-        </div>
+          </>
+        )}
+        {artifact.artifact_type === "worksheet" && (
+          <>
+            <button
+              onClick={() => router.push(`/worksheet/${artifact.id}`)}
+              className="text-xs px-3 py-1 rounded bg-gray-700 text-green-400 hover:bg-gray-600 transition-colors"
+            >
+              Practice
+            </button>
+            <button
+              onClick={handleDownloadPdf}
+              disabled={downloading}
+              className="text-xs px-3 py-1 rounded bg-gray-700 text-amber-400 hover:bg-gray-600 transition-colors disabled:opacity-50"
+            >
+              {downloading ? "..." : "PDF"}
+            </button>
+          </>
+        )}
       </div>
-      {isSummaryExpanded && summaryText && (
-        <div className="text-sm text-gray-400 bg-gray-800 rounded p-3 ml-4 border border-gray-700">
-          {summaryText}
-        </div>
-      )}
+    </div>
+  );
+}
+
+function FlashCardsRow({
+  count,
+  sessionId,
+}: {
+  readonly count: number;
+  readonly sessionId: string;
+}) {
+  const router = useRouter();
+
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-sm text-gray-300 capitalize min-w-[100px]">
+        Flash Cards
+      </span>
+      <span className="text-xs text-gray-500">{count} card{count !== 1 ? "s" : ""}</span>
+      <div className="ml-auto flex gap-2">
+        <button
+          onClick={() => router.push(`/reviews/${sessionId}/flash-cards`)}
+          className="text-xs px-3 py-1 rounded bg-gray-700 text-purple-400 hover:bg-gray-600 transition-colors"
+        >
+          Flash Cards
+        </button>
+      </div>
     </div>
   );
 }
 
 function SessionCard({
   data,
-  expandedSummaryId,
-  onExpandSummary,
 }: {
   readonly data: SessionWithArtifacts;
-  readonly expandedSummaryId: string | null;
-  readonly onExpandSummary: (id: string | null) => void;
 }) {
-  const readyArtifacts = data.artifacts.filter((a) => a.status === "ready");
+  const readyArtifacts = data.artifacts.filter(
+    (a) => a.status === "ready" && a.artifact_type !== "review_quiz"
+  );
+  const hasContent = readyArtifacts.length > 0 || data.flashCards.length > 0;
 
   return (
     <div className="border border-gray-700 rounded-lg p-4 bg-gray-800/40">
@@ -202,7 +218,7 @@ function SessionCard({
           </span>
         )}
       </div>
-      {readyArtifacts.length === 0 ? (
+      {!hasContent ? (
         <p className="text-xs text-gray-500">No artifacts available yet.</p>
       ) : (
         <div className="flex flex-col gap-2">
@@ -211,10 +227,14 @@ function SessionCard({
               key={artifact.id}
               artifact={artifact}
               sessionId={data.session.id}
-              expandedSummaryId={expandedSummaryId}
-              onExpandSummary={onExpandSummary}
             />
           ))}
+          {data.flashCards.length > 0 && (
+            <FlashCardsRow
+              count={data.flashCards.length}
+              sessionId={data.session.id}
+            />
+          )}
         </div>
       )}
     </div>
@@ -232,9 +252,6 @@ export default function ReviewsPage() {
   const [allSessions, setAllSessions] = useState<
     readonly SessionWithArtifacts[]
   >([]);
-  const [expandedSummaryId, setExpandedSummaryId] = useState<string | null>(
-    null
-  );
   const [subjectFilter, setSubjectFilter] = useState<Subject | null>(null);
   const [gradeFilter, setGradeFilter] = useState<number | null>(null);
 
@@ -249,21 +266,37 @@ export default function ReviewsPage() {
 
     async function fetchData() {
       try {
-        const sessions = await listSessions(userId!);
+        const [sessions, allCards] = await Promise.all([
+          listSessions(userId!),
+          listFlashCards(userId!).catch(() => [] as FlashCard[]),
+        ]);
         const completedSessions = sessions.filter(
           (s) => s.status === "completed"
         );
+
+        // Group flash cards by source session
+        const cardsBySession = new Map<string, FlashCard[]>();
+        for (const card of allCards) {
+          if (card.source_session_id) {
+            const existing = cardsBySession.get(card.source_session_id) ?? [];
+            cardsBySession.set(card.source_session_id, [...existing, card]);
+          }
+        }
 
         const withArtifacts: SessionWithArtifacts[] = await Promise.all(
           completedSessions.map(async (session) => {
             try {
               const artifacts = await listArtifacts(session.id);
-              return { session, artifacts };
+              return {
+                session,
+                artifacts,
+                flashCards: cardsBySession.get(session.id) ?? [],
+              };
             } catch {
               logger.warn("artifacts_fetch_failed", {
                 sessionId: session.id,
               });
-              return { session, artifacts: [] };
+              return { session, artifacts: [], flashCards: cardsBySession.get(session.id) ?? [] };
             }
           })
         );
@@ -514,8 +547,6 @@ export default function ReviewsPage() {
                   <SessionCard
                     key={data.session.id}
                     data={data}
-                    expandedSummaryId={expandedSummaryId}
-                    onExpandSummary={setExpandedSummaryId}
                   />
                 ))}
               </div>
@@ -532,8 +563,6 @@ export default function ReviewsPage() {
                 <SessionCard
                   key={data.session.id}
                   data={data}
-                  expandedSummaryId={expandedSummaryId}
-                  onExpandSummary={setExpandedSummaryId}
                 />
               ))}
             </div>

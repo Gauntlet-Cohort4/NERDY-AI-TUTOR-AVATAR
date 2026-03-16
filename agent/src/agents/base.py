@@ -79,7 +79,8 @@ class SubjectTutorAgent(Agent):
         payload = {"type": "equation", "latex": latex, "title": title}
         if not await self._publish_whiteboard(payload):
             logger.warning("whiteboard_equation_failed", latex=latex[:40])
-        return ""
+            return "Failed to display equation."
+        return "Equation is now displayed on the whiteboard. Talk about what the student sees."
 
     @function_tool
     async def show_diagram(
@@ -111,7 +112,8 @@ class SubjectTutorAgent(Agent):
         }
         if not await self._publish_whiteboard(payload):
             logger.warning("whiteboard_diagram_failed", topic_key=topic_key)
-        return ""
+            return "Failed to display diagram."
+        return f"Diagram '{asset['title']}' is now on the whiteboard. Discuss what the student sees."
 
     @function_tool
     async def show_interactive(
@@ -139,7 +141,8 @@ class SubjectTutorAgent(Agent):
         }
         if not await self._publish_whiteboard(payload):
             logger.warning("whiteboard_interactive_failed", template_id=template_id)
-        return ""
+            return "Failed to display interactive template."
+        return f"Interactive {template_id} is now on the whiteboard. Guide the student through what they see."
 
     @function_tool
     async def generate_visual(
@@ -189,7 +192,8 @@ class SubjectTutorAgent(Agent):
 
         Returns True on success, False on failure.
         """
-        room = getattr(self.session, "room", None)
+        room_io = getattr(self.session, "room_io", None)
+        room = getattr(room_io, "room", None) if room_io is not None else None
         if room is None:
             logger.warning("whiteboard_publish_skipped", reason="no room")
             return False

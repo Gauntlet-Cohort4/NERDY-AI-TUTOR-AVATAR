@@ -16,6 +16,11 @@ FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
+# Fonts for PDF rendering
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy installed packages from builder
 COPY --from=builder /install /usr/local
 

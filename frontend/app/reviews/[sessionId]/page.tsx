@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getSession, listArtifacts } from "@/lib/api";
 import type {
@@ -10,6 +10,7 @@ import type {
   CheatSheetContent,
   WorksheetContent,
 } from "@/lib/types";
+import ReactMarkdown from "react-markdown";
 import { createLogger } from "@/lib/logger";
 
 const logger = createLogger("SessionDetailPage");
@@ -56,14 +57,48 @@ function parseWorksheet(artifact: Artifact): WorksheetContent | null {
 // Sub-components
 // ---------------------------------------------------------------------------
 
+function LatexFormula({ latex }: { readonly latex: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [fallback, setFallback] = useState(false);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    import("katex")
+      .then((katex) => {
+        if (ref.current) {
+          katex.default.render(latex, ref.current, {
+            throwOnError: false,
+            displayMode: true,
+          });
+        }
+      })
+      .catch(() => {
+        setFallback(true);
+      });
+  }, [latex]);
+
+  if (fallback) {
+    return (
+      <div className="text-gray-300 text-sm mt-1 font-mono bg-gray-900 rounded px-2 py-1 inline-block">
+        {latex}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={ref}
+      className="text-gray-300 text-sm mt-1 bg-gray-900 rounded px-3 py-2 overflow-x-auto"
+    />
+  );
+}
+
 function SummarySection({ content }: { readonly content: SummaryContent }) {
   return (
     <section className="mb-8">
       <h2 className="text-lg font-semibold text-white mb-3">Session Summary</h2>
-      <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-5">
-        <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
-          {content.text}
-        </p>
+      <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-5 prose prose-sm prose-invert max-w-none">
+        <ReactMarkdown>{content.text}</ReactMarkdown>
       </div>
     </section>
   );
@@ -75,7 +110,7 @@ function CheatSheetSection({
   readonly content: CheatSheetContent;
 }) {
   return (
-    <section className="mb-8">
+    <section id="cheat-sheet" className="mb-8 scroll-mt-20">
       <h2 className="text-lg font-semibold text-white mb-3">
         {content.title || "Cheat Sheet"}
       </h2>
@@ -118,9 +153,7 @@ function CheatSheetSection({
                   <span className="text-white font-medium text-sm">
                     {formula.name}
                   </span>
-                  <div className="text-gray-300 text-sm mt-1 font-mono bg-gray-900 rounded px-2 py-1 inline-block">
-                    {formula.latex}
-                  </div>
+                  <LatexFormula latex={formula.latex} />
                   <p className="text-gray-500 text-xs mt-1">
                     {formula.when_to_use}
                   </p>
@@ -336,8 +369,9 @@ export default function SessionDetailPage() {
             <p className="text-gray-500 text-sm mb-8">
               Grade {session.grade} &middot;{" "}
               {session.subject.replace(/_/g, " ")}
-              {session.duration_secs !== null &&
-                ` &middot; ${Math.round(session.duration_secs / 60)} min`}
+              {session.duration_secs !== null && (
+                <> &middot; {Math.round(session.duration_secs / 60)} min</>
+              )}
             </p>
 
             {summary && <SummarySection content={summary} />}
@@ -348,6 +382,17 @@ export default function SessionDetailPage() {
                 artifactId={worksheetArtifact.id}
               />
             )}
+            <section className="mb-8">
+              <button
+                onClick={() => router.push(`/reviews/${sessionId}/flash-cards`)}
+                className="w-full text-left bg-gray-800/60 border border-gray-700 rounded-lg p-5 hover:border-purple-500/40 transition-colors cursor-pointer"
+              >
+                <h2 className="text-lg font-semibold text-white mb-1">Flash Cards</h2>
+                <p className="text-gray-400 text-sm">
+                  Study key terms and concepts from this session
+                </p>
+              </button>
+            </section>
 
             {artifacts.length === 0 && (
               <p className="text-gray-500 text-sm text-center py-10">
@@ -355,15 +400,6 @@ export default function SessionDetailPage() {
               </p>
             )}
 
-            {/* Review Quiz CTA */}
-            <div className="text-center mt-8">
-              <button
-                onClick={() => router.push(`/review-quiz/${sessionId}`)}
-                className="text-sm px-6 py-3 rounded-lg bg-purple-600 text-white hover:bg-purple-500 transition-colors"
-              >
-                Take Review Quiz
-              </button>
-            </div>
           </>
         )}
       </main>

@@ -797,14 +797,7 @@ async def entrypoint(ctx) -> None:
             if not text:
                 return
             logger.info("text_input_received", session_id=room_name, length=len(text))
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                loop = None
-            if loop is not None:
-                loop.create_task(session.generate_reply(user_input=text))
-            else:
-                logger.warning("no_event_loop_for_chat_input", session_id=room_name)
+            session.generate_reply(user_input=text)
         except Exception as exc:
             error = PipelineError(
                 stage=PipelineStage.SESSION,

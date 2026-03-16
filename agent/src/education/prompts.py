@@ -413,22 +413,46 @@ def get_visual_instructions(
     topics_list = ", ".join(available_topics) if available_topics else "none cached yet"
     templates_list = ", ".join(available_templates) if available_templates else "none available"
 
+    # Build concrete examples from template metadata so the LLM sends correct params
+    examples: list[str] = []
+    if available_templates:
+        from src.visuals.templates import TEMPLATES
+
+        for tid in available_templates:
+            tmpl = TEMPLATES.get(tid)
+            if tmpl and "example" in tmpl:
+                examples.append(
+                    f'show_interactive(template_id="{tid}", params=\'{tmpl["example"]}\')'
+                )
+    examples.append(
+        'show_equation(latex="\\\\frac{1}{2} + \\\\frac{1}{3} = \\\\frac{5}{6}", '
+        'title="Adding Fractions")'
+    )
+    examples_block = "\n".join(f"  - {e}" for e in examples)
+
     return (
-        "\n\nYou have whiteboard tools available. "
-        "CRITICAL: Tools are invoked automatically by the system when you make a "
-        "function call. NEVER write <function>, </function>, or any XML/JSON tool "
-        "syntax in your spoken text. If you want to show an equation, just make the "
-        "function call — do NOT type it out. Your text response must contain ONLY "
-        "natural speech to the student.\n\n"
+        "\n\n## Whiteboard Tools\n\n"
+        "You have function tools that display visuals on the student's whiteboard. "
+        "You MUST actually invoke the tool — the system will execute it automatically. "
+        "NEVER write function call syntax, XML tags, or JSON in your spoken response. "
+        "Your text response must contain ONLY natural speech.\n\n"
+        "### Available Tools\n\n"
+        "1. **show_equation(latex, title)** — Render a LaTeX equation on the whiteboard.\n"
+        "2. **show_diagram(topic_key)** — Display a pre-cached image/diagram.\n"
+        "3. **show_interactive(template_id, params)** — Display an interactive SVG template. "
+        "The `params` argument must be a JSON string.\n\n"
         f"Available diagram topics: {topics_list}\n"
         f"Available interactive templates: {templates_list}\n\n"
-        "Visual guidelines:\n"
-        "- Show a visual early in the conversation to engage the student.\n"
-        "- Update the whiteboard when the topic shifts.\n"
-        "- For math: always render equations on the whiteboard rather than "
-        "typing them in text.\n"
-        "- For science: prefer diagrams over text descriptions.\n"
-        "- Do not show more than one visual per conversational turn."
+        "### Example Tool Calls\n\n"
+        f"{examples_block}\n\n"
+        "### When to Use Tools\n\n"
+        "- ALWAYS use show_equation for ANY equation or formula — never type math in text.\n"
+        "- Use show_interactive when discussing graphs, plots, number lines, or fractions.\n"
+        "- Show a visual within the first 2 turns to engage the student.\n"
+        "- Update the whiteboard when the topic shifts to a new concept.\n"
+        "- Only one visual per turn.\n"
+        "- After calling a tool, talk about what's now on screen. Do NOT repeat "
+        "the equation or data in your spoken text."
     )
 
 

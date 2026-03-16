@@ -44,7 +44,7 @@ export default function DiagramViewer({ content, title, altText, type }: Diagram
       >
         {type === "svg_diagram" ? (
           <div
-            className="max-w-2xl max-h-96"
+            className="max-w-4xl max-h-[70vh]"
             dangerouslySetInnerHTML={{ __html: safeSvg }}
           />
         ) : (
@@ -53,7 +53,7 @@ export default function DiagramViewer({ content, title, altText, type }: Diagram
             alt={altText || title || "Educational diagram"}
             width={672}
             height={384}
-            className="max-w-2xl max-h-96 rounded-lg object-contain"
+            className="max-w-4xl max-h-[70vh] rounded-lg object-contain"
             unoptimized
           />
         )}

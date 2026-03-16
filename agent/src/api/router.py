@@ -562,16 +562,32 @@ def _handle_artifact_detail(
 def _handle_artifact_pdf(
     pool, artifact_id: UUID,
 ) -> tuple[bytes, int, str]:
-    """Download artifact PDF."""
+    """Download artifact PDF. Generates on-demand if not cached."""
     try:
         from src.db import artifacts as artifacts_db
 
         artifact = _run_async(artifacts_db.get_artifact(pool, artifact_id))
         if artifact is None:
             return _error_response("Artifact not found", 404)
+
         pdf_bytes = artifact.get("content_pdf")
         if pdf_bytes is None:
-            return _error_response("PDF not available for this artifact", 404)
+            # Generate on-demand from JSON content
+            content_json = artifact.get("content_json")
+            artifact_type = artifact.get("artifact_type", "")
+            if not content_json or artifact.get("status") != "ready":
+                return _error_response("Artifact content not ready for PDF generation", 404)
+
+            from src.artifacts.pdf_renderer import render_artifact_pdf
+
+            try:
+                pdf_bytes = render_artifact_pdf(artifact_type, content_json)
+            except ValueError as exc:
+                return _error_response(str(exc), 400)
+
+            # Cache for future requests
+            _run_async(artifacts_db.update_pdf(pool, artifact_id, pdf_bytes))
+
         return pdf_bytes, 200, "application/pdf"
     except Exception:
         logger.exception("get_artifact_pdf_failed")

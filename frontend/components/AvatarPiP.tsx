@@ -3,14 +3,18 @@
 import AvatarDisplay from "./AvatarDisplay";
 
 interface AvatarPiPProps {
-  isActive: boolean;
+  readonly isActive: boolean;
 }
 
+/**
+ * Inline mini-avatar shown when the whiteboard is active.
+ * Renders as a small rounded element that can be placed anywhere in the layout.
+ */
 export default function AvatarPiP({ isActive }: AvatarPiPProps) {
   if (!isActive) return null;
 
   return (
-    <div className="fixed bottom-24 right-6 z-30 w-48 h-48 rounded-xl overflow-hidden shadow-2xl border-2 border-gray-700 transition-all duration-500 ease-in-out">
+    <div className="w-52 rounded-xl overflow-hidden shadow-2xl border-2 border-gray-700 flex-shrink-0">
       <AvatarDisplay />
     </div>
   );

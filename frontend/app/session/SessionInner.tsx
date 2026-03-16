@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { useConnectionState, useDataChannel, useRoomContext, useTranscriptions } from "@livekit/components-react";
+import { useConnectionState, useDataChannel, useRemoteParticipants, useRoomContext, useTranscriptions } from "@livekit/components-react";
 import { ConnectionState as LKConnectionState } from "livekit-client";
 import { mapConnectionState, parseMetricsMessage, parseWhiteboardPayload } from "@/lib/livekit";
 import { createLogger } from "@/lib/logger";
@@ -17,6 +17,7 @@ interface SessionInnerProps {
   onTranscriptUpdate: (entry: TranscriptEntry) => void;
   onWhiteboardUpdate: (payload: WhiteboardPayload) => void;
   onSendMessageReady: (sendFn: (text: string) => void) => void;
+  onAgentLeft?: () => void;
 }
 
 /**
@@ -31,9 +32,11 @@ export default function SessionInner({
   onTranscriptUpdate,
   onWhiteboardUpdate,
   onSendMessageReady,
+  onAgentLeft,
 }: SessionInnerProps) {
   const lkConnectionState: LKConnectionState = useConnectionState();
   const room = useRoomContext();
+  const remoteParticipants = useRemoteParticipants();
 
   // Sync LiveKit connection state up to the parent.
   useEffect(() => {
@@ -41,6 +44,26 @@ export default function SessionInner({
     logger.debug("lk_connection_state", { raw: lkConnectionState, mapped, subject });
     onConnectionStateChange(mapped);
   }, [lkConnectionState, onConnectionStateChange, subject]);
+
+  // Detect when the agent participant leaves — the avatar goes blank but
+  // the room stays connected. Redirect to dashboard after a short grace period
+  // to avoid false positives during brief reconnects.
+  const hadAgent = useRef(false);
+  useEffect(() => {
+    const hasAgent = remoteParticipants.length > 0;
+    if (hasAgent) {
+      hadAgent.current = true;
+      return;
+    }
+    // Agent was here but now gone — wait 3s then end session
+    if (hadAgent.current && !hasAgent) {
+      const timer = setTimeout(() => {
+        logger.info("agent_left_ending_session");
+        onAgentLeft?.();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [remoteParticipants.length, onAgentLeft]);
 
   // Expose the text send function to parent once room is available.
   useEffect(() => {

@@ -240,13 +240,6 @@ function Navbar() {
       </div>
       <div className="flex items-center gap-4">
         <button
-          onClick={() => router.push("/upload")}
-          className="text-white/70 text-sm font-medium px-4 py-2 rounded-lg hover:text-white hover:bg-white/5 transition-colors bg-transparent border-none cursor-pointer"
-          style={{ fontFamily: "inherit" }}
-        >
-          Upload Worksheet
-        </button>
-        <button
           onClick={() => router.push("/flash-cards")}
           className="text-white/70 text-sm font-medium px-4 py-2 rounded-lg hover:text-white hover:bg-white/5 transition-colors bg-transparent border-none cursor-pointer"
           style={{ fontFamily: "inherit" }}

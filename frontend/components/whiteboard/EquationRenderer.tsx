@@ -46,7 +46,7 @@ export default function EquationRenderer({ latex, title }: EquationRendererProps
       {title && <h3 className="text-lg font-semibold text-gray-200 mb-6">{title}</h3>}
       <div
         ref={containerRef}
-        className="text-3xl text-white bg-gray-800/50 rounded-xl p-8 max-w-2xl"
+        className="text-3xl text-white bg-gray-800/50 rounded-xl p-8 max-w-4xl w-full"
       />
     </div>
   );
